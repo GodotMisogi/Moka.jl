@@ -49,35 +49,39 @@ Base.size(m::Mesh, loc::Vertex) = size(m.HorizontalMesh, loc)
 Base.size(m::Mesh, loc::Layer) = size(m.VerticalMesh, loc)
 Base.size(m::Mesh, loc::LT) = size(m, loc())
 
-#=
-function Mesh(Config::GlobalConfig; backend=KA.CPU())
-    # get mesh section of the streams file
-    meshConfig = ConfigGet(Config.streams, "mesh")
-    # get mesh filepath from streams section
-    meshPath = ConfigGet(meshConfig, "filename_template")
-    # read the mesh file once
-    mesh_ds = NCDataset(meshPath, "r", format=:netcdf4)
-    # checks nVertLevels from config file to ensure consitency with mesh file
-    nVertLevels = validate_vertical_mesh_args(mesh_ds, meshConfig)
+Base.size(m::Mesh, loc_tuple::Tuple) = Tuple(size(m, loc) for loc in loc_tuple)
 
-    return Mesh(mesh_ds; nVertLevels=nVertLevels, backend=backend)
+"""
+    Mesh(filepath::AbstractString, architecture=CPU(), FT=Float64; kwargs...)
+
+Construct a `Mesh` with data type `FT` by reading a MPAS mesh (netcdf) file
+from disk onto `architecture` (CPU() or GPU()). The `Mesh` structure contains
+both the `HorizontalMesh` and `VerticalMesh` as fields.
+
+Keyword arguments
+=================
+
+- `nVertLevels :: Int`: The number of vertical layers to create the mesh with.
+  If `nothing` the vertical layer information will be read from the input
+  `filepath`. If the input `filepath` does not contain an vertical mesh
+  information then the vertical mesh will be created with one layer.
+"""
+function Mesh(filepath::AbstractString,
+              architecture::AbstractArchitecture = CPU(),
+              FT::DataType = Float64; kwargs...)
+
+    ds = NCDataset(filepath, "r", format=:netcdf4)
+    Mesh(ds, architecture, FT; kwargs...)
 end
-=#
 
-"""
-    Mesh(filepath::AbstractString; FT=Float64, Arch=CPU(), nVertLevels=nothing)
+function Mesh(ds::NCDataset, arch::AbstractArchitecture, FT::DataType; nVertLevels=nothing)
 
-Constuctor function to read an MPAS mesh from disk and initialize both a horizontal
-and vertical mesh, with element types `FT` and on architecutre `Arch`
-"""
-function Mesh(ds::NCDataset; FT=Float64, nVertLevels=nothing)
-
-    # Read in the purely horizontal mesh on the CPU
-    horizontal_mesh = HorizontalMesh(ds)
+    # Read horizontal mesh onto CPU with `FT` eltype
+    horizontal_mesh = HorizontalMesh(ds, FT)
 
     if isnothing(nVertLevels)
         # Create a vertical mesh on the CPU, using the horizontal mesh
-        vertical_mesh = VerticalMesh(ds, horizontal_mesh)
+        vertical_mesh = VerticalMesh(ds, horizontal_mesh, FT)
     else
         # check kwarg nVertLevels is consitent with the input mesh file
         nVertLevels = validate_vertical_mesh_args(ds, nVertLevels)
@@ -85,22 +89,14 @@ function Mesh(ds::NCDataset; FT=Float64, nVertLevels=nothing)
         vertical_mesh = VerticalMesh(horizontal_mesh; nVertLevels=nVertLevels)
     end
     # With both a horizontal and vertical mesh; initalize the boundary mask
-    horizontal_mesh = setBoundaryMask(horizontal_mesh, vertical_mesh)
+    horizontal_mesh = set_boundary_mask(horizontal_mesh, vertical_mesh)
 
     # Create the full Mesh strucutre on the CPU
-    return Mesh{FT}(CPU(), horizontal_mesh, vertical_mesh)
+    return Mesh{FT}(arch, horizontal_mesh, vertical_mesh)
 end
 
-function Mesh(mesh_fp::String; kwargs...)
-    Mesh(NCDataset(mesh_fp, "r", format=:netcdf4); kwargs...)
-end
-
-function Adapt.adapt_structure(backend, x::Mesh)
-    return Mesh(Adapt.adapt(backend, x.HorzMesh),
-                Adapt.adapt(backend, x.VertMesh))
-end
-
-function setBoundaryMask(HorzMesh, VertMesh)
+""" Initialize the Boundary Mask """
+function set_boundary_mask(HorzMesh, VertMesh)
 
     nEdges = HorzMesh.Edges.nEdges
     nVertLevels = VertMesh.nVertLevels
@@ -137,3 +133,25 @@ function validate_vertical_mesh_args(ds::NCDataset, nVertLevels::Int)
 end
 
 has_vertical_dim(ds::NCDataset) = haskey(ds.dim, "nVertLevels")
+
+#####
+##### Utilities
+#####
+
+function Adapt.adapt_structure(device, x::Mesh)
+    return Mesh(architecture(device),
+                Adapt.adapt(device, x.HorizontalMesh),
+                Adapt.adapt(device, x.VerticalMesh))
+end
+
+"""
+    on_architecture(architecture, mesh::Mesh)
+
+Return a mesh that's identical to `mesh` but on `architecture`.
+"""
+function on_architecture(arch::AbstractSerialArchitecture, mesh::Mesh)
+    if arch == architecture(mesh)
+        return grid
+    end
+    return Adapt.adapt_structure(Architectures.device(arch), mesh)
+end

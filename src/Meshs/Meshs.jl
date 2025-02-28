@@ -1,6 +1,7 @@
 module Meshs
 
 export Cell, Edge, Vertex, Layer
+export PrimaryCells, DualCells, Edges
 export Mesh, HorizontalMesh, VerticalMesh
 export on_architecture
 
@@ -15,6 +16,7 @@ using Moka
 using Moka.Architectures
 
 import Base: size, eltype
+import Moka.Architectures: architecture, on_architecture
 
 #####
 ##### Abstract types

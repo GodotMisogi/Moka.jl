@@ -36,15 +36,19 @@ Base.size(h::HorizontalMesh, ::Vertex) = dimsize(h).nVertices
 Base.size(h::HorizontalMesh, loc::HT) = size(h, loc())
 
 """
-    HorizontalMesh(filepath;)
+    HorizontalMesh(filepath, FT=Float64)
 
-TODO: Write description for HorizontalMesh constructor
+Construct a `HorizontalMesh` with data type `FT` on `CPU()`.
 """
-function HorizontalMesh(meshDataset::NCDataset)
+function HorizontalMesh(filepath::AbstractString, FT::DataType=Float64)
+    HorizontalMesh(NCDataset(filepath), FT)
+end
 
-    primary_cells = PrimaryCells(meshDataset)
-    dual_cells = DualCells(meshDataset)
-    edges = Edges(meshDataset)
+function HorizontalMesh(ds::NCDataset, FT::DataType)
+
+    primary_cells = PrimaryCells(ds, FT)
+    dual_cells = DualCells(ds, FT)
+    edges = Edges(ds, FT)
 
     # set the edgeSignOn[Cell|Vertex] fields
     signIndexField!(primary_cells, edges)
@@ -53,7 +57,6 @@ function HorizontalMesh(meshDataset::NCDataset)
     return HorizontalMesh(CPU(), primary_cells, dual_cells, edges)
 end
 
-HorizontalMesh(filepath::AbstractString) = HorizontalMesh(NCDataset(filepath))
 
 function signIndexField!(primaryCells::PrimaryCells, edges::Edges)
 

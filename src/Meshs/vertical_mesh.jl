@@ -35,11 +35,13 @@ Base.size(v::VerticalMesh, ::Layer) = dimsize(v).nVertLevels
 Base.size(v::VerticalMesh, loc::Type{Layer}) = size(v, loc())
 
 """
-    VerticalMesh(ds::NCDataset, horizontal_mesh::HorizontalMesh)
+    VerticalMesh(ds::NCDataset, horizontal_mesh::HorizontalMesh, FT=Float64)
 
-Constructor for vertical mesh
+Construct a `VerticalMesh`
 """
-function VerticalMesh(ds, horizontal_mesh)
+function VerticalMesh(ds::NCDataset,
+                      horizontal_mesh::HorizontalMesh,
+                      FT::DataType = eltype(horizontal_mesh))
 
     # if no vertical info is present, then create a single layered mesh
     if !haskey(ds.dim, "nVertLevels")
@@ -65,7 +67,7 @@ function VerticalMesh(ds, horizontal_mesh)
     active_levels_edge = active_levels(maxLevelCell, horizontal_mesh, Edge)
     active_levels_vertex = active_levels(maxLevelCell, horizontal_mesh, Vertex)
 
-    restingThickness = ds["restingThickness"][:,:,1]
+    restingThickness = convert(Array{FT, 2}, ds["restingThickness"][:,:,1])
     restingThicknessSum = sum(restingThickness; dims=1)
 
     return VerticalMesh(CPU(),
@@ -159,6 +161,10 @@ function active_levels(maxLevelCell, horizontal_mesh, ::Type{Vertex})
     return top
 end
 
+#####
+##### Utilities
+#####
+
 function Adapt.adapt_structure(device, x::VerticalMesh)
     return VerticalMesh(Architectures.architecture(device),
                         x.nVertLevels,
@@ -167,4 +173,31 @@ function Adapt.adapt_structure(device, x::VerticalMesh)
                         Adapt.adapt(device, x.maxLevelVertex),
                         Adapt.adapt(device, x.restingThickness),
                         Adapt.adapt(device, x.restingThicknessSum))
+end
+
+"""
+    on_architecture(architecture, vertical_mesh)
+
+Return a horizontal mesh that's identical to `vertial_mesh` but on `architecture`.
+"""
+function on_architecture(arch::AbstractSerialArchitecture, mesh::VerticalMesh)
+    if arch == architecture(mesh)
+        return grid
+    end
+    return Adapt.adapt_structure(Architectures.device(arch), mesh)
+end
+
+#####
+##### Showing grids
+#####
+
+function Base.summary(mesh::VerticalMesh)
+    FT = eltype(mesh)
+
+    return string(" VerticalMesh{$FT} on ", summary(architecture(mesh)),
+                  " with ", dimsize(mesh))
+end
+
+function Base.show(io::IO, mesh::VerticalMesh, withsummary=true)
+        print(io, summary(mesh), "\n")
 end

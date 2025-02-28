@@ -79,18 +79,28 @@ dimsize(vertices::DualCells) = (nVertices=vertices.nVertices, vertexDegree=verti
 ##### Constructors for reading mesh from disk
 #####
 
-function PrimaryCells(ds::NCDataset)
-    field_names = fieldnames(PrimaryCells)[2:end]
-    field_values = map(f -> read_field(ds, f), field_names)
-    kwargs = NamedTuple{field_names}(field_values)
+function PrimaryCells(filepath::AbstractString, FT::DataType=Float64)
+    PrimaryCells(NCDataset(filepath), FT)
+end
+
+function DualCells(filepath::AbstractString, FT::DataType=Float64)
+    DualCells(NCDataset(filepath), FT)
+end
+
+function Edges(filepath::AbstractString, FT::DataType=Float64)
+    Edges(NCDataset(filepath), FT)
+end
+
+function PrimaryCells(ds::NCDataset, FT::DataType=Float64)
+    field_names = fieldnames(PrimaryCells)
+    kwargs = _read_from_disk(ds, field_names, FT)
     @reset kwargs.edgeSignOnCell = zeros(Int32, (kwargs.maxEdges, kwargs.nCells))
     return PrimaryCells(; architecture=CPU(), kwargs...)
 end
 
-function DualCells(ds::NCDataset)
-    field_names = fieldnames(DualCells)[2:end]
-    field_values = map(f -> read_field(ds, f), field_names)
-    kwargs = NamedTuple{field_names}(field_values)
+function DualCells(ds::NCDataset, FT::DataType=Float64)
+    field_names = fieldnames(DualCells)
+    kwargs = _read_from_disk(ds, field_names, FT)
     if :vertexMask ∈ field_names
         # dummy value to be overwritten by `setBoundaryMask!`
         kwargs.vertexMask = zeros(Int32, (1, kwargs.nVertices))
@@ -99,26 +109,21 @@ function DualCells(ds::NCDataset)
     return DualCells(; architecture=CPU(), kwargs...)
 end
 
-function Edges(ds::NCDataset)
-    field_names = fieldnames(Edges)[2:end]
-    field_values = map(f -> read_field(ds, f), field_names)
-    kwargs = NamedTuple{field_names}(field_values)
+function Edges(ds::NCDataset, FT::DataType=Float64)
+    field_names = fieldnames(Edges)
+    kwargs = _read_from_disk(ds, field_names, FT)
     # dummy value to be overwritten by `setBoundaryMask!`
     @reset kwargs.edgeMask = zeros(Int32, (1, kwargs.nEdges))
     return Edges(; architecture=CPU(), kwargs...)
 end
 
-function _read_from_disk(ds::NCDataset, element::AbstractMeshElement)
-    field_names = fieldnames(typeof(element))[2:end]
-    field_values = map(f -> read_field(ds, f), field_names)
+function _read_from_disk(ds::NCDataset, field_names::Tuple, FT::DataType)
+    field_names = field_names[2:end] # skip arch field
+    field_values = map(f -> read_field(ds, f, FT), field_names)
     return NamedTuple{field_names}(field_values)
 end
 
-PrimaryCells(filepath::AbstractString) = PrimaryCells(NCDataset(filepath))
-DualCells(filepath::AbstractString) = DualCells(NCDataset(filepath))
-Edges(filepath::AbstractString) = Edges(NCDataset(filepath))
-
-function read_field(ds::NCDataset, field::Symbol)
+function read_field(ds::NCDataset, field::Symbol, FT::DataType)
 
     field = string(field)
 
@@ -130,11 +135,13 @@ function read_field(ds::NCDataset, field::Symbol)
         @error ""
     end
 
-    if ndims(ds[field]) == 2
-        return ds[field][:, :]
-    else
-        return ds[field][:]
+    data = ndims(ds[field]) == 2 ? ds[field][:, :] : ds[field][:]
+
+    if eltype(data) <: AbstractFloat
+        data = convert(Array{FT, ndims(data)}, data)
     end
+
+    return data
 end
 
 #####
