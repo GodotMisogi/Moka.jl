@@ -1,46 +1,98 @@
-#module Architectures
-#
-#export check_typeof_args, check_agrs_backend, check_eltype_args
-#
-#end 
-import Adapt
-import KernelAbstractions as KA
+# heavily lifted from: https://github.com/CliMA/Oceananigans.jl/blob/main/src/Architectures.jl
+module Architectures
 
-# arch: CPU or GPU
-# backend: CPU, CUDABackend, ROCBackend 
+export AbstractArchitecture, AbstractSerialArchitecture
+export CPU, GPU
+export device, architecture, unified_array, device_copy_to!
+export array_type, on_architecture, arch_array
 
-on_architecture(backend::Backend, array::AbstractArray) = Adapt.adapt_storage(backend, array)
+using CUDA
+using KernelAbstractions
+using Adapt
+using OffsetArrays
 
-###
-### Helper functions for constructing PrognosticVars, DiagnosticVars,
-### TendencyVars, and ForcingVars strcuture
-###
+"""
+    AbstractArchitecture
 
-function check_typeof_args(args::Tuple)
-    # check the type names; irrespective of type parameters
-    # (e.g. `Array` instead of `Array{Float64, 1}`)
-    if !allequal(nameof.(typeof.(args)))
-        error("Input arguments must be of all the same type")
+Abstract supertype for architectures supported by Moka.
+"""
+abstract type AbstractArchitecture end
+
+"""
+    AbstractSerialArchitecture
+
+Abstract supertype for serial architectures supported by Moka.
+"""
+abstract type AbstractSerialArchitecture <: AbstractArchitecture end
+
+"""
+    CPU <: AbstractArchitecture
+
+Run Moka on one CPU node. Uses multiple threads if the environment
+variable `JULIA_NUM_THREADS` is set.
+"""
+struct CPU <: AbstractSerialArchitecture end
+
+"""
+    GPU(device)
+
+Return a GPU architecture using `device`.
+`device` defauls to CUDA.CUDABackend(always_inline=false)
+"""
+struct GPU{D} <: AbstractSerialArchitecture 
+    device :: D
+end
+
+const CUDAGPU = GPU{<:CUDA.CUDABackend}
+CUDAGPU() = GPU(CUDA.CUDABackend(always_inline=true))
+Base.summary(::CUDAGPU) = "CUDAGPU"
+
+function GPU()
+    if CUDA.has_cuda_gpu()
+        return CUDAGPU()
+    else
+        msg = """We cannot make a GPU with the CUDA backend:
+                 a CUDA GPU was not found!"""
+        throw(ArgumentError(msg))
     end
 end
 
-function check_args_backend(args::Tuple)
-    # check that all args are on the same backend, assumes the 
-    # args has a get_backend method (e.g. arg <: AbstratArray)
-    if !allequal(KA.get_backend.(args))
-        error("All input arguments must have the same backend")
-    end
-end
 
-function check_eltype_args(args::Tuple)
-    # check that all args have the same `eltype`; assumes all
-    # args have a `eltype` method
-    if !allequal(eltype.(args))
-        error("All input arguments must have the same eltype")
-    end
-    # if they are all the same type (i.e. no error is raised)
-    # return the eltype of the arguments
-    type, = eltype.(args)
-    
-    return type
-end    
+device(a::CPU) = KernelAbstractions.CPU()
+device(a::GPU) = a.device
+
+architecture() = nothing
+architecture(::Number) = nothing
+architecture(::Array) = CPU()
+architecture(::CuArray) = CUDAGPU()
+architecture(a::OffsetArray) = architecture(parent(a))
+
+architecture(::CUDABackend) = CUDAGPU()
+architecture(::KernelAbstractions.CPU) = CPU()
+
+array_type(::CPU) = Array
+array_type(::GPU) = CuArray
+
+# Fallback 
+on_architecture(arch, a) = a
+
+# Tupled implementation
+on_architecture(arch::AbstractSerialArchitecture, t::Tuple) = Tuple(on_architecture(arch, elem) for elem in t)
+on_architecture(arch::AbstractSerialArchitecture, nt::NamedTuple) = NamedTuple{keys(nt)}(on_architecture(arch, Tuple(nt)))
+
+# On architecture for array types
+on_architecture(::CPU, a::Array) = a
+on_architecture(::CPU, a::CuArray) = Array(a)
+
+on_architecture(::CUDAGPU, a::Array) = CuArray(a)
+on_architecture(::CUDAGPU, a::CuArray) = a
+
+on_architecture(arch::AbstractSerialArchitecture, a::OffsetArray) = OffsetArray(on_architecture(arch, a.parent), a.offsets...)
+
+cpu_architecture(::CPU) = CPU()
+cpu_architecture(::GPU) = CPU()
+
+unified_array(::CPU, a) = a
+unified_array(::GPU, a) = a
+
+end #module
