@@ -43,13 +43,19 @@ dimsize(m::Mesh) = (nCells=dimsize(m.HorizontalMesh).nCells,
 
 const LT = Union{Type{Cell}, Type{Edge}, Type{Vertex}, Type{Layer}}
 
+Base.length(m::Mesh, loc::Cell) = length(m.HorizontalMesh, loc)
+Base.length(m::Mesh, loc::Edge) = length(m.HorizontalMesh, loc)
+Base.length(m::Mesh, loc::Vertex) = length(m.HorizontalMesh, loc)
+Base.length(m::Mesh, loc::Layer) = length(m.VerticalMesh, loc)
+Base.length(m::Mesh, loc::LT) = length(m, loc())
+
 Base.size(m::Mesh, loc::Cell) = size(m.HorizontalMesh, loc)
 Base.size(m::Mesh, loc::Edge) = size(m.HorizontalMesh, loc)
 Base.size(m::Mesh, loc::Vertex) = size(m.HorizontalMesh, loc)
 Base.size(m::Mesh, loc::Layer) = size(m.VerticalMesh, loc)
 Base.size(m::Mesh, loc::LT) = size(m, loc())
 
-Base.size(m::Mesh, loc_tuple::Tuple) = Tuple(size(m, loc) for loc in loc_tuple)
+Base.size(m::Mesh, loc_tuple::Tuple) = Tuple(length(m, loc) for loc in loc_tuple)
 
 """
     Mesh(filepath::AbstractString, architecture=CPU(), FT=Float64; kwargs...)

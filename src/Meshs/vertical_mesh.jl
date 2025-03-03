@@ -27,11 +27,14 @@ Return the architecture (CPU or GPU) that the vertical mesh element lives on.
 Base.eltype(::VerticalMesh{FT}) where FT = FT
 Base.eps(::VerticalMesh{FT}) where FT = eps(FT)
 
+Base.length(v::VerticalMesh, ::Layer) = v.nVertLevels
+Base.length(v::VerticalMesh, loc::Type{Layer}) = length(v, loc())
+
 dimsize(v::VerticalMesh) = (nVertLevels=v.nVertLevels,)
 
 @inline Base.size(v::VerticalMesh) = (v.nVertLevels,)
 
-Base.size(v::VerticalMesh, ::Layer) = dimsize(v).nVertLevels
+Base.size(v::VerticalMesh, ::Layer) = (v.nVertLevels,)
 Base.size(v::VerticalMesh, loc::Type{Layer}) = size(v, loc())
 
 """
@@ -50,7 +53,7 @@ function VerticalMesh(ds::NCDataset,
         nVertLevels = Int32(ds.dim["nVertLevels"])
     end
 
-    nCells = size(horizontal_mesh, Cell)
+    nCells = length(horizontal_mesh, Cell)
     # Pre-allocate zero indexed offsetarrays
     maxLevelCell = padded_index_array(nCells)
     # Read in the maximum level for all interior indices

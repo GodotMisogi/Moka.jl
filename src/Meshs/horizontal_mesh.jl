@@ -22,17 +22,22 @@ Return the architecture (CPU or GPU) that the horizontal mesh element lives on.
 Base.eltype(::HorizontalMesh{FT}) where FT = FT
 Base.eps(::HorizontalMesh{FT}) where FT = eps(FT)
 
-dimsize(h::HorizontalMesh) = (nCells=dimsize(h.PrimaryCells).nCells,
-                              nVertices=dimsize(h.DualCells).nVertices,
-                              nEdges=dimsize(h.Edges).nEdges)
+dimsize(h::HorizontalMesh) = (nCells = length(h.PrimaryCells),
+                              nEdges = length(h.Edges),
+                              nVertices = length(h.DualCells))
 
-@inline Base.size(h::HorizontalMesh) = (dimsize(h).nCells, dimsize(h).nVertices, dimsize(h).nEdges)
+@inline Base.size(h::HorizontalMesh) = (dimsize(h).nCells, dimsize(h).nEdges, dimsize(h).nVertices)
 
 const HT = Union{Type{Cell}, Type{Edge}, Type{Vertex}}
 
-Base.size(h::HorizontalMesh, ::Cell) = dimsize(h).nCells
-Base.size(h::HorizontalMesh, ::Edge) = dimsize(h).nEdges
-Base.size(h::HorizontalMesh, ::Vertex) = dimsize(h).nVertices
+Base.length(h::HorizontalMesh, ::Cell) = length(h.PrimaryCells)
+Base.length(h::HorizontalMesh, ::Edge) = length(h.Edges)
+Base.length(h::HorizontalMesh, ::Vertex) = length(h.DualCells)
+Base.length(h::HorizontalMesh, loc::HT) = length(h, loc())
+
+Base.size(h::HorizontalMesh, ::Cell) = (dimsize(h).nCells,)
+Base.size(h::HorizontalMesh, ::Edge) = (dimsize(h).nEdges,)
+Base.size(h::HorizontalMesh, ::Vertex) = (dimsize(h).nVertices,)
 Base.size(h::HorizontalMesh, loc::HT) = size(h, loc())
 
 """

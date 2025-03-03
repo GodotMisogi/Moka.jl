@@ -67,9 +67,13 @@ end
         areaTriangle :: FV   # Area in square meters for a given triangle of the dual mesh.
 end
 
-@inline Base.size(edges::Edges) = (edges.nEdges,)
-@inline Base.size(cells::PrimaryCells) = (cells.nCells,)
-@inline Base.size(vertices::DualCells) = (vertices.nVertices,)
+@inline Base.length(edges::Edges) = edges.nEdges
+@inline Base.length(cells::PrimaryCells) = cells.nCells
+@inline Base.length(vertices::DualCells) = vertices.nVertices
+
+@inline Base.size(edges::Edges) = (length(edges),)
+@inline Base.size(cells::PrimaryCells) = (length(cells),)
+@inline Base.size(vertices::DualCells) = (length(vertices),)
 
 dimsize(edges::Edges) = (nEdges=edges.nEdges,)
 dimsize(cells::PrimaryCells) = (nCells=cells.nCells, maxEdges=cells.maxEdges)
