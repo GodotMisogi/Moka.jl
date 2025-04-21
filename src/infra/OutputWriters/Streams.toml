@@ -9,6 +9,10 @@ units = "m"
 dimensions = ["nVertLevels", "nEdges", "time"]
 units = "m s-1"
 
+[prognostics.ssh]
+dimensions = ["nCells", "time"]
+units = "m"
+
 ################################################
 # Diagnostic variables available for output
 ################################################

@@ -9,6 +9,9 @@ module MOKA
     export VerticalMesh, ReadHorzMesh, Mesh, HorzMesh, VertMesh,
            Cell, Edge, Vertex
    
+    # OutputWriter
+    export NetCDFWriter, write_output!
+
     # Operators
     export GradientOnEdge!,
            DivergenceOnCell!, 
@@ -27,16 +30,13 @@ module MOKA
     include("infra/MPASMesh/MPASMesh.jl")
     include("infra/ModelSetup.jl")
 
-
     include("ocn/Operators.jl")
     include("ocn/ForcingVars.jl")
     include("ocn/PrognosticVars.jl")
     include("ocn/DiagnosticVars.jl")
-    
-    # This infrastrcutre code is lower down b/c it depends on Prog/Diag structures 
-    # for now, so those have to be defined before it can be included
-    include("infra/OutPut.jl")
 
+    include("infra/OutputWriters/OutputWriters.jl")
+    
     include("ocn/Tendencies/TendencyVars.jl")
     include("ocn/Tendencies/normalVelocity/normalVelocity.jl")
     include("ocn/Tendencies/layerThickness/layerThickness.jl")
@@ -51,6 +51,7 @@ module MOKA
     ### Needed so we can export names from sub-modules at the top level
     ###
     using .MPASMesh    
+    using .OutputWriters
     using .normalVelocity
     using .layerThickness
 end
