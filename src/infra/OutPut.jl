@@ -1,3 +1,44 @@
+using TOML
+
+const streams = TOML.parsefile("Streams.toml")
+const supported_variables = begin
+    reduce(vcat, [collect(keys(streams[k])) for k in keys(streams)])
+end
+
+mutable struct OutputWriter{M, D, O, T}
+        mesh :: M 
+    filepath :: String
+     dataset :: D
+     outputs :: O
+    schedule :: T
+end
+
+function OutputWriter(mesh, filepath, vars)
+    # This creates a new NetCDF file (clobber)
+    ds = NCDataset(filepath, "c")
+
+    nEdges = mesh.HorzMesh.Edges.nEdges
+    nCells = mesh.HorzMesh.PrimaryCells.nCells
+    nVertices = mesh.HorzMesh.DualCells.nVertices
+    nVertLevels = mesh.VertMesh.nVertLevels
+
+    # Define horizontal dimensions
+    defDim(ds, "nCells", nCells)
+    defDim(ds, "nEdges", nEdges)
+    defDim(ds, "nVertices", nVertices)
+    # Define vertical dimensions
+    defDim(ds, "nVertLevels", nVertLevels)
+    # Define an unlimited time dimension
+    defDim(ds, "time", Inf)
+
+    for var in vars
+        if var ∉ supported_variables
+            @warn "$(var) is a supported output variable"
+        end
+    end
+end
+
+#=
 function write_netcdf(Setup::ModelSetup,
                       Diag::DiagnosticVars,
                       Prog::PrognosticVars,
@@ -213,10 +254,4 @@ function write_netcdf(Setup::ModelSetup,
 
     close(ds)
 end
-
-#function io_writeTimestep()
-#end 
-#
-#function io_finalize(ds)
-#end
-
+=#

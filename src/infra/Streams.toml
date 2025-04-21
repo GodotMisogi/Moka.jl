@@ -1,0 +1,30 @@
+################################################
+# Prognostic variables available for output
+################################################
+[prognostics.layerThickness]
+dimensions = ["nVertLevels", "nCells", "time"]
+units = "m"
+
+[prognostics.normalVelocity]
+dimensions = ["nVertLevels", "nEdges", "time"]
+units = "m s-1"
+
+################################################
+# Diagnostic variables available for output
+################################################
+[diagnostics]
+[diagnostics.layerThicknessEdge]
+dimensions = ["nVertLevels", "nEdges", "time"]
+units = "m"
+
+[diagnostics.thicknessFlux]
+dimensions = ["nVertLevels", "nEdges", "time"]
+units = "m s-1"
+
+[diagnostics.velocityDivCell]
+dimensions = ["nVertLevels", "nCells", "time"]
+units = "s-1"
+
+[diagnostics.relativeVorticity]
+dimensions = ["nVertLevels", "nVertices", "time"]
+units = "s-1"
