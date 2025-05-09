@@ -99,7 +99,7 @@ function ocn_run_with_ad(config_fp, k, backend)
     #
     
     # Only suport i/o at the end of the simulation for now 
-    write_netcdf(Setup, Diag, Prog, d_Prog)
+    #write_netcdf(Setup, Diag, Prog, d_Prog)
     
     backend = get_backend(Tend.tendNormalVelocity)
     arch = typeof(backend) <: KA.GPU ? "GPU" : "CPU"
