@@ -30,21 +30,14 @@ function ocn_run(config_fp)
     @show backend
 
     # Initialize the Model
-    Setup, Diag, Tend, Prog, Forcing    = ocn_init(config_fp; backend = backend)
+    Setup, Diag, Tend, Prog, Forcing, IO_writer = ocn_init(config_fp; backend = backend)
     println("Initialized the model")
     clock, simulationAlarm, outputAlarm = ocn_init_alarms(Setup)
     println("Initialized the clock.")
     timestep = KA.zeros(backend, Float64, (1,))
     @allowscalar timestep[1] = convert(Float64, Dates.value(Second(Setup.timeManager.timeStep)))
 
-    ocn_run_loop(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler, clock, simulationAlarm, outputAlarm; backend=backend)
-
-    #
-    # Writing to outputs
-    #
-
-    # Only suport i/o at the end of the simulation for now
-    write_netcdf(Setup, Diag, Prog)
+    ocn_run_loop(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler, clock, simulationAlarm, outputAlarm, IO_writer; backend=backend)
 
     backend = get_backend(Tend.tendNormalVelocity)
     arch = typeof(backend) <: KA.GPU ? "GPU" : "CPU"

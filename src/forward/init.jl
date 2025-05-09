@@ -28,7 +28,10 @@ function ocn_init(Config_filepath; backend=KA.CPU())
 
     Tend = TendencyVars(Config, mesh; backend=backend)
 
-    return Setup, Diag, Tend, Prog, Forcing
+    IO_stream = ConfigGet(Config.streams, "output")
+    IO_writer = NetCDFWriter(mesh, IO_stream)
+
+    return Setup, Diag, Tend, Prog, Forcing, IO_writer
 end
 
 function ocn_init_shadows(Prog, Diag, Tend; backend=KA.CPU())

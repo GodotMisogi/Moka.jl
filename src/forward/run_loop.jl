@@ -6,7 +6,7 @@ mycopyto!(dest, src) = copyto!(dest, src)
 
 # Helper function that runs the model "loop" without instantiating new memory or performing I/O.
 # This is what we call AD on. At the end we also sum up the squared SSH for testing purposes.
-function ocn_run_loop(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler, clock, simulationAlarm, outputAlarm; backend=CUDABackend())
+function ocn_run_loop(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler, clock, simulationAlarm, outputAlarm, IO_writer; backend=CUDABackend())
 
     # Adapt the full mesh strcuture to the requested backend
     @reset Setup.mesh = Adapt.adapt_structure(backend, Setup.mesh)
@@ -19,6 +19,7 @@ function ocn_run_loop(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler, 
         ocn_timestep(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler; backend=backend)
         if isRinging(outputAlarm)
             # should be doing i/o in here, using a i/o struct... unless we want to apply AD
+            write_output!(IO_writer, Prog, Diag, clock.currTime)
             reset!(outputAlarm)
         end
     end
