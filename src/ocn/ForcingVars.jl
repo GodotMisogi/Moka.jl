@@ -1,4 +1,4 @@
-import MOKA.MPASMesh: padded_index_array
+import MOKA.MPASMesh: padded_array
 
 const Abstract1DArray = AbstractArray{F, 1} where F <: Real
 const Array1DOrNothing = Union{Abstract1DArray, Nothing}
@@ -66,8 +66,8 @@ function surface_bulk_forcing_vel(forcing_fn::String, mesh::Mesh)
    end
 
    # Pre-allocate zero indexed offsetarrays on the CPU 
-   windStressZonal = padded_index_array(nCells; eltype=Float64)
-   windStressMerid = padded_index_array(nCells; eltype=Float64)
+   windStressZonal = padded_array(nCells; eltype=Float64)
+   windStressMerid = padded_array(nCells; eltype=Float64)
 
    # read the wind stress components from the forcing file
    windStressZonal[1:end] = forcing_ds["windStressZonal"][:, 1]
@@ -81,6 +81,7 @@ function surface_bulk_forcing_vel(forcing_fn::String, mesh::Mesh)
        iCell1 = cellsOnEdge[1, iEdge]
        iCell2 = cellsOnEdge[2, iEdge]
 
+       # mpas_vector_cell_to_edge_anisotropic
        zonalWSEdge = 0.5 * (windStressZonal[iCell1] + windStressZonal[iCell2])
        meridWSEdge = 0.5 * (windStressMerid[iCell1] + windStressMerid[iCell2])
        

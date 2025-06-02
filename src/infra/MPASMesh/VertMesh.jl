@@ -15,16 +15,12 @@ mutable struct VerticalMesh{I, IV, FV, AL}
 end
 
 mutable struct ActiveLevels{IV}
-    # Index to the last {edge|vertex} in a column with active ocean cells 
+    # Index to the last {edge|vertex} in a column with active ocean cells
     # on *all* sides of it
-    Top::IV 
+    Top::IV
     # Index to the last {edge|vertex} in a column with at least one active
     # ocean cell around it
     Bot::IV
-end
-
-function padded_index_array(dimLength; backend=KA.CPU(), eltype=Int32)
-    OffsetArray(KA.zeros(backend, eltype, dimLength + 1), 0:dimLength)
 end
 
 """
@@ -38,17 +34,17 @@ function ActiveLevels(dim, eltype, backend)
 end
 
 function ActiveLevels{Edge}(maxLevelCell, h_mesh; backend=KA.CPU())
-    
+
     @unpack nEdges, cellsOnEdge = h_mesh.Edges
 
     # Top is the minimum (shallowest) of the surrounding cells
-    Top = padded_index_array(nEdges; backend=backend) 
+    Top = padded_array(nEdges; backend=backend)
     # Bot is the maximum (deepest) of the surrounding cells
-    Bot = padded_index_array(nEdges; backend=backend)
-    
+    Bot = padded_array(nEdges; backend=backend)
+
     for iEdge in 1:nEdges
-        @inbounds iCell1 = cellsOnEdge[1, iEdge] 
-        @inbounds iCell2 = cellsOnEdge[2, iEdge] 
+        @inbounds iCell1 = cellsOnEdge[1, iEdge]
+        @inbounds iCell2 = cellsOnEdge[2, iEdge]
 
         Top[iEdge] = min(maxLevelCell[iCell1], maxLevelCell[iCell2])
         Bot[iEdge] = max(maxLevelCell[iCell1], maxLevelCell[iCell2])
@@ -62,9 +58,9 @@ function ActiveLevels{Vertex}(maxLevelCell, h_mesh; backend=KA.CPU())
     @unpack nVertices, cellsOnVertex, vertexDegree = h_mesh.DualCells
 
     # Top is the minimum (shallowest) of the surrounding cells
-    Top = padded_index_array(nVertices; backend=backend) 
+    Top = padded_array(nVertices; backend=backend)
     # Bot is the maximum (deepest) of the surrounding cells
-    Bot = padded_index_array(nVertices; backend=backend)
+    Bot = padded_array(nVertices; backend=backend)
 
     for iVertex in 1:nVertices
         # get vector indices of the cellsOnVertex (e.g. (3,))
@@ -79,7 +75,7 @@ end
 
 
 function VerticalMesh(mesh_ds, mesh; backend=KA.CPU())
-    
+
     # if no vertical info is present, then create a single layered mesh
     if !haskey(mesh_ds.dim, "nVertLevels")
         return VerticalMesh(mesh)
@@ -88,12 +84,12 @@ function VerticalMesh(mesh_ds, mesh; backend=KA.CPU())
     end
 
     nCells = mesh.PrimaryCells.nCells
-    # Pre-allocate zero indexed offsetarrays 
-    maxLevelCell = padded_index_array(nCells; backend=backend)
+    # Pre-allocate zero indexed offsetarrays
+    maxLevelCell = padded_array(nCells; backend=backend)
     # Read in the maximum level for all interior indices
     maxLevelCell[1:end] = mesh_ds["maxLevelCell"][:]
-    
-    # check that the vertical mesh is stacked 
+
+    # check that the vertical mesh is stacked
     if !all(maxLevelCell[1:end] .== nVertLevels)
         @error """ (Vertical Mesh Initializaton)\n
                Vertical Mesh is not stacked. Must implement vertical masking
@@ -110,18 +106,18 @@ function VerticalMesh(mesh_ds, mesh; backend=KA.CPU())
     VerticalMesh(nVertLevels,
                  Adapt.adapt(backend, maxLevelCell),
                  ActiveLevelsEdge,
-                 ActiveLevelsVertex, 
+                 ActiveLevelsVertex,
                  Adapt.adapt(backend, restingThickness),
                  Adapt.adapt(backend, restingThicknessSum))
 end
 
 """
-Constructor for an (n) layer stacked vertical mesh. Only valid when paired 
+Constructor for an (n) layer stacked vertical mesh. Only valid when paired
 with a *periodic* horizontal mesh.
 
-This function is handy for unit test that read in purely horizontal meshes. 
+This function is handy for unit test that read in purely horizontal meshes.
 
-NOTE: Not to be used for real simualtions, only for unit testing. 
+NOTE: Not to be used for real simualtions, only for unit testing.
 """
 function VerticalMesh(mesh; nVertLevels=1, backend=KA.CPU())
 
@@ -140,13 +136,13 @@ function VerticalMesh(mesh; nVertLevels=1, backend=KA.CPU())
     VerticalMesh(nVertLevels,
                  maxLevelCell,
                  ActiveLevelsEdge,
-                 ActiveLevelsVertex, 
+                 ActiveLevelsVertex,
                  restingThickness,
                  restingThicknessSum)
 end
 
 function Adapt.adapt_structure(backend, x::ActiveLevels)
-    return ActiveLevels(Adapt.adapt(backend, x.Top), 
+    return ActiveLevels(Adapt.adapt(backend, x.Top),
                         Adapt.adapt(backend, x.Bot))
 end
 

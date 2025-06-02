@@ -247,18 +247,18 @@ function readEdgeInfo(ds::NCDataset)
     nEdges = ds.dim["nEdges"]
 
     # coordinate data
-    xᵉ = ds["xEdge"][:]
-    yᵉ = ds["yEdge"][:]
-    zᵉ = ds["zEdge"][:]
+    xᵉ = OffsetArray(ds["xEdge"][:])
+    yᵉ = OffsetArray(ds["yEdge"][:])
+    zᵉ = OffsetArray(ds["zEdge"][:])
 
     if haskey(ds, "fEdge")
-        fᵉ = ds["fEdge"][:]
+        fᵉ = OffsetArray(ds["fEdge"][:])
     else
         # initalize coriolis as zero b/c not included in the base mesh
         fᵉ = zeros(eltype(xᵉ), nEdges)
     end
 
-    nEdgesOnEdge = ds["nEdgesOnEdge"][:]
+    nEdgesOnEdge = OffsetArray(ds["nEdgesOnEdge"][:])
 
     # intra connectivity
     cellsOnEdge = ds["cellsOnEdge"][:,:]
@@ -268,15 +268,18 @@ function readEdgeInfo(ds::NCDataset)
     edgesOnEdge = ds["edgesOnEdge"][:,:]
     weightsOnEdge = ds["weightsOnEdge"][:,:]
 
-    angleEdge = ds["angleEdge"][:]
+    angleEdge = OffsetArray(ds["angleEdge"][:])
 
     # edgeMask is created with one vertical layer, irrespecitve of how many
     # vertical layers are in the mesh. A properly shaped edgeMask will be
     # created by `setBoundaryMask!`, after the vertical mesh is initialized
     edgeMask = zeros(Int32, (1, nEdges))
 
-    dvEdge = ds["dvEdge"][:]
-    dcEdge = ds["dcEdge"][:]
+    dvEdge = padded_array(nEdges; eltype=Float64)
+    dcEdge = padded_array(nEdges; eltype=Float64)
+
+    dvEdge[1:end] = ds["dvEdge"][:]
+    dcEdge[1:end] = ds["dcEdge"][:]
 
     Edges(nEdges = nEdges,
           xᵉ = xᵉ, yᵉ = yᵉ, zᵉ = zᵉ, fᵉ = fᵉ,

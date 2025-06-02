@@ -10,7 +10,7 @@ export Cell, Edge, Vertex, ReadHorzMesh, HorzMesh
 using UnPack
 using Accessors
 using NCDatasets
-using KernelAbstractions 
+using KernelAbstractions
 using OffsetArrays
 
 using MOKA
@@ -35,7 +35,7 @@ function Mesh(Config::GlobalConfig; backend=KA.CPU())
     nVertLevels = validate_vertical_mesh_args(mesh_ds, meshConfig)
 
     return Mesh(mesh_ds; nVertLevels=nVertLevels, backend=backend)
-end 
+end
 
 function Mesh(mesh_fp::String; kwargs...)
     Mesh(NCDataset(mesh_fp, "r", format=:netcdf4); kwargs...)
@@ -45,7 +45,7 @@ function Mesh(mesh_ds::NCDataset; nVertLevels=nothing, backend=KA.CPU())
     # Read in the purely horizontal mesh on the CPU
     HorzMesh = ReadHorzMesh(mesh_ds)
 
-    # Create a vertical mesh on the CPU, using the horizontal mesh	
+    # Create a vertical mesh on the CPU, using the horizontal mesh
     if isnothing(nVertLevels)
         # created a vertical mesh based on info in NetCDF file
         VertMesh = VerticalMesh(mesh_ds, HorzMesh)
@@ -55,12 +55,12 @@ function Mesh(mesh_ds::NCDataset; nVertLevels=nothing, backend=KA.CPU())
         # create a stacked vertical mesh with (n) vertical levels
         VertMesh = VerticalMesh(HorzMesh; nVertLevels=nVertLevels)
     end
-    
+
     # With both a horizontal and vertical mesh, now initalize the boundary mask
     HorzMesh = setBoundaryMask(HorzMesh, VertMesh)
     # Create the full Mesh strucutre on the CPU
     MPASMesh = Mesh(HorzMesh, VertMesh)
-    
+
     return MPASMesh
 end
 
@@ -103,9 +103,22 @@ function validate_vertical_mesh_args(mesh_ds::NCDataset, nVertLevels::Int)
     end
 end
 
-has_vertical_dim(mesh_ds::NCDataset) = haskey(mesh_ds.dim, "nVertLevels") 
+has_vertical_dim(mesh_ds::NCDataset) = haskey(mesh_ds.dim, "nVertLevels")
+
+padded_array(length...; kwargs...) = padded_array(length; kwargs...)
+
+function padded_array(length::Int; backend=KA.CPU(), eltype=Int32)
+    OffsetArray(KA.zeros(backend, eltype, length + 1), 0:length)
+end
+
+function padded_array(length::Tuple{Int, Int}; backend=KA.CPU(), eltype=Int32)
+    # padded dim {nEdges, nCells, nVertices} should always outter dimension
+    indices = (1:length[1], 0:length[2])
+    padded_length = (length[1], length[2] + 1)
+    OffsetArray(KA.zeros(backend, eltype, padded_length...), indices...)
+end
 
 include("HorzMesh.jl")
 include("VertMesh.jl")
 
-end 
+end
