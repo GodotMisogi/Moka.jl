@@ -33,6 +33,7 @@ function pressure_gradient_tendency!(Tend::TendencyVars,
             dcEdge,
             maxLevelEdge.Top,
             edgeMask,
+            nEdges,
             ndrange=nEdges)
 
     # sync the backend
@@ -47,24 +48,23 @@ end
                                 @Const(cellsOnEdge),
                                 @Const(dcEdge),
                                 @Const(maxLevelEdgeTop),
-                                @Const(edgeMask))
+                                @Const(edgeMask),
+                                @Const(nEdges))
 
     # global indices over nEdges
     iEdge = @index(Global, Linear)
 
-    # cell connectivity information for iEdge
-    @inbounds jCell1 = cellsOnEdge[1, iEdge]      
-    @inbounds jCell2 = cellsOnEdge[2, iEdge]
-    
-    # padded iCell array would probably be better
-    #if jCell2 > 0 break end
+    if iEdge < nEdges + 1
+        # cell connectivity information for iEdge
+        @inbounds jCell1 = cellsOnEdge[1, iEdge]
+        @inbounds jCell2 = cellsOnEdge[2, iEdge]
+        # inverse edge spacing for iEdge
+        @inbounds InvDcEdge = 1. / dcEdge[iEdge]
 
-    # inverse edge spacing for iEdge
-    @inbounds InvDcEdge = 1. / dcEdge[iEdge]
-  
-    for k in 1:maxLevelEdgeTop[iEdge]
-        # gradient on edges calculation 
-        tendency[k, iEdge] -= 9.80616 * edgeMask[k, iEdge] *
-                              (ssh[jCell2] - ssh[jCell1]) * InvDcEdge
+        for k in 1:maxLevelEdgeTop[iEdge]
+            # gradient on edges calculation
+            tendency[k, iEdge] -= 9.80616 * edgeMask[k, iEdge] *
+                                  (ssh[jCell2] - ssh[jCell1]) * InvDcEdge
+        end
     end
 end
