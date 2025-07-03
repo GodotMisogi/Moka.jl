@@ -24,6 +24,8 @@ function ocn_run_loop(timestep, Prog, Diag, Tend, Forcing, Setup, ForwardEuler, 
         end
     end
 
+    close(IO_writer)
+
     return nothing
 end
 
