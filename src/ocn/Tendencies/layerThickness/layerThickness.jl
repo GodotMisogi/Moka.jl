@@ -24,7 +24,8 @@ function computeLayerThicknessTendency!(Tend::TendencyVars,
 
     # compute horizontal advection of layer thickness
     horizontal_advection_tendency!(
-        Tend, Prog, Diag, Mesh; backend = backend)
+        Tend, Prog, Diag, Mesh; backend = backend
+    )
 end
 
 end

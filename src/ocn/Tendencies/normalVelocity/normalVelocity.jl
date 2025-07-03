@@ -42,7 +42,7 @@ function computeNormalVelocityTendency!(Tend::TendencyVars,
     # compute pressure gradient tendency on requested backend
     pressure_gradient_tendency!(
         Tend, Prog, Diag, Mesh, pGradType; backend = backend
-       )
+    )
 
     # hard coded type for now, see above about inquiring into the config struct
     coriolisType = linearCoriolis
@@ -50,7 +50,7 @@ function computeNormalVelocityTendency!(Tend::TendencyVars,
     # compute horizontal advection and corilois tendency on requested backend
     horizontal_advection_and_coriolis_tendency!(
         Tend, Prog, Diag, Mesh, coriolisType; backend = backend
-       )
+    )
 
     # compute horizontal momentum mixing
     horizontal_momentum_mixing_tendency!(

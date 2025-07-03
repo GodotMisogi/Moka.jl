@@ -19,12 +19,10 @@ function pressure_gradient_tendency!(Tend::TendencyVars,
 
     @unpack maxLevelEdge = VertMesh
     @unpack nEdges, dcEdge, cellsOnEdge, edgeMask = Edges
-   
-    # get the current timelevel of ssh 
-    ssh = Prog.ssh[end] #[:,end]
-    # unpack the normal velocity tendency term
-    @unpack tendNormalVelocity = Tend 
-    
+
+    ssh = Prog.ssh[end]
+    @unpack tendNormalVelocity = Tend
+
     # initialize the kernel
     nthreads = 50
     kernel! = SSHGradOnEdge!(backend, nthreads)

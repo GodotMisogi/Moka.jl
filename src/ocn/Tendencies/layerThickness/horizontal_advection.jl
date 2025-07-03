@@ -56,9 +56,6 @@ end
     # get inverse cell area
     invArea = 1. / areaCell[iCell]
 
-    # create tmp varibale to store div reduction
-    #div = @localmem eltype(DivCell) (1)
-
     # loop over number of edges in primary cell
     for i in 1:nEdgesOnCell[iCell]
         iEdge = edgesOnCell[i,iCell]
@@ -66,8 +63,7 @@ end
         for k in 1:maxLevelEdgeTop[iEdge]
             tendency[k,iCell] += dvEdge[iEdge] * edgeSignOnCell[i,iCell] *
                                  normalVelocity[k, iEdge] *
-                                 layerThicknessEdge[k, iEdge] *
-                                 invArea
+                                 layerThicknessEdge[k, iEdge] * invArea
         end
     end
 end
