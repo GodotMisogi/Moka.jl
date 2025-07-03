@@ -26,6 +26,9 @@ function ocn_init(Config_filepath; backend=KA.CPU())
     # the first time integration loop to ensure values are initialized
     Diag = DiagnosticVars(Config, mesh; backend=backend)
 
+    # compute the diagnostics based on the IC
+    diagnostic_compute!(mesh, Diag, Prog; backend = backend)
+
     Tend = TendencyVars(Config, mesh; backend=backend)
 
     IO_stream = ConfigGet(Config.streams, "output")
