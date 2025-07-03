@@ -1,29 +1,29 @@
 """
-methods for calculting tendencies of horizontal momentum diffusion using 
-KernelAbstractions 
+methods for calculting tendencies of horizontal momentum diffusion using
+KernelAbstractions
 """
 
-abstract type MomentumDiffusion end 
+abstract type MomentumDiffusion end
 
-abstract type Del2 <: MomentumDiffusion end 
-abstract type Del4 <: MomentumDiffusion end 
+abstract type Del2 <: MomentumDiffusion end
+abstract type Del4 <: MomentumDiffusion end
 
 function horizontal_momentum_mixing_tendency!(Tend::TendencyVars,
                                               Prog::PrognosticVars,
                                               Diag::DiagnosticVars,
-                                              Mesh::Mesh, 
-                                              ::Type{Del2}; 
+                                              Mesh::Mesh,
+                                              ::Type{Del2};
                                               backend = KA.CPU())
 
-    @unpack HorzMesh, VertMesh = Mesh    
+    @unpack HorzMesh, VertMesh = Mesh
     @unpack PrimaryCells, DualCells, Edges = HorzMesh
 
-    @unpack maxLevelEdge = VertMesh 
+    @unpack maxLevelEdge = VertMesh
     @unpack nEdges, dcEdge, dvEdge = Edges
     @unpack cellsOnEdge, verticesOnEdge, edgeMask = Edges
 
     # unpack the normal velocity tendency term
-    @unpack tendNormalVelocity = Tend 
+    @unpack tendNormalVelocity = Tend
     # get needed fields from diagnostics structure
     @unpack velocityDivCell, relativeVorticity = Diag
 
@@ -34,9 +34,9 @@ function horizontal_momentum_mixing_tendency!(Tend::TendencyVars,
     kernel! = horizontalm_momentum_mixing_del2!(backend, nthreads)
     # use kernel to compute horizontal momentum mixing
     kernel!(tendNormalVelocity,
-            velocityDivCell, 
-            relativeVorticity, 
-            cellsOnEdge, 
+            velocityDivCell,
+            relativeVorticity,
+            cellsOnEdge,
             verticesOnEdge,
             dcEdge,
             dvEdge,
@@ -45,33 +45,33 @@ function horizontal_momentum_mixing_tendency!(Tend::TendencyVars,
             edgeMask,
             ndrange=nEdges)
 
-    # sync the backend 
+    # sync the backend
     KA.synchronize(backend)
-    
+
     # pack the tendecy pack into the struct for further computation
-    @pack! Tend = tendNormalVelocity 
+    @pack! Tend = tendNormalVelocity
 end
 
-@kernel function horizontalm_momentum_mixing_del2!(tendency, 
+@kernel function horizontalm_momentum_mixing_del2!(tendency,
                                                    @Const(div),
                                                    @Const(relVort),
                                                    @Const(cellsOnEdge),
-                                                   @Const(verticesOnEdge), 
-                                                   @Const(dcEdge), 
-                                                   @Const(dvEdge), 
+                                                   @Const(verticesOnEdge),
+                                                   @Const(dcEdge),
+                                                   @Const(dvEdge),
                                                    @Const(viscDel2),
-                                                   @Const(maxLevelEdgeTop), 
+                                                   @Const(maxLevelEdgeTop),
                                                    @Const(edgeMask))
     # global indices over nEdges
     iEdge = @index(Global, Linear)
-    
+
     @inbounds @private iCell1 = cellsOnEdge[1, iEdge]
     @inbounds @private iCell2 = cellsOnEdge[2, iEdge]
     @inbounds @private iVertex1 = verticesOnEdge[1, iEdge]
     @inbounds @private iVertex2 = verticesOnEdge[2, iEdge]
 
-    @inbounds @private dcEdgeInv = 1.0 / dcEdge[iEdge] 
-    @inbounds @private dvEdgeInv = 1.0 / dvEdge[iEdge] 
+    @inbounds @private dcEdgeInv = 1.0 / dcEdge[iEdge]
+    @inbounds @private dvEdgeInv = 1.0 / dvEdge[iEdge]
 
     for k in 1:maxLevelEdgeTop[iEdge]
         @inbounds tendency[k, iEdge] += (

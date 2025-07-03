@@ -1,23 +1,23 @@
-# define our parent abstract type 
+# define our parent abstract type
 abstract type PresssureGradient end
 
 using KernelAbstractions
 const KA=KernelAbstractions
 
-# define the supported PressureGradient types to dispatch on. 
-abstract type sshGradient <: PresssureGradient end 
+# define the supported PressureGradient types to dispatch on.
+abstract type sshGradient <: PresssureGradient end
 
-function pressure_gradient_tendency!(Tend::TendencyVars, 
+function pressure_gradient_tendency!(Tend::TendencyVars,
                                      Prog::PrognosticVars,
-                                     Diag::DiagnosticVars, 
-                                     Mesh::Mesh, 
+                                     Diag::DiagnosticVars,
+                                     Mesh::Mesh,
                                      ::Type{sshGradient};
                                      backend = KA.CPU())
 
-    @unpack HorzMesh, VertMesh = Mesh    
+    @unpack HorzMesh, VertMesh = Mesh
     @unpack PrimaryCells, DualCells, Edges = HorzMesh
 
-    @unpack maxLevelEdge = VertMesh 
+    @unpack maxLevelEdge = VertMesh
     @unpack nEdges, dcEdge, cellsOnEdge, edgeMask = Edges
    
     # get the current timelevel of ssh 
@@ -36,17 +36,18 @@ function pressure_gradient_tendency!(Tend::TendencyVars,
             maxLevelEdge.Top,
             edgeMask,
             ndrange=nEdges)
-    # sync the backend 
+
+    # sync the backend
     KA.synchronize(backend)
-    
+
     # pack the tendecy pack into the struct for further computation
-    @pack! Tend = tendNormalVelocity 
+    @pack! Tend = tendNormalVelocity
 end
 
 @kernel function SSHGradOnEdge!(tendency,
                                 @Const(ssh),
-                                @Const(cellsOnEdge), 
-                                @Const(dcEdge), 
+                                @Const(cellsOnEdge),
+                                @Const(dcEdge),
                                 @Const(maxLevelEdgeTop),
                                 @Const(edgeMask))
 

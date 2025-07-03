@@ -1,11 +1,11 @@
-#abstract type StateVar end 
+#abstract type StateVar end
 #normalVelocity <: StateVar
 #layerThickness <: StateVar
 #temperature <: StateVar
 #salinty <: StateVar
 
 mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
-    
+
     # var: time tendency of normal component of velociy [m s^{-2}]
     # dim: (nVertLevels, nEdges), Time?)
     tendNormalVelocity::FV2
@@ -13,18 +13,18 @@ mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
     # var: time tendency of layer thickness [m s^{-1}]
     # dim: (nVertLevels, nCells), Time?)
     tendLayerThickness::FV2
-    
+
     #= UNUSED FOR NOW:
     # var: time tendency of potential temperature [\deg C s^{-1}]
     # dim: (nVertLevels, nCells), Time?)
     temperatureTend::FV2
 
-    # var: time tendency of salinity measured as change in practical 
+    # var: time tendency of salinity measured as change in practical
     #      salinity unit per second [PSU s^{-1}]
     # dim: (nVertLevels, nCells), Time?)
     salinityTend::FV2
 
-    # NOTE: I don't think this needs to be a Tendency term. 
+    # NOTE: I don't think this needs to be a Tendency term.
     # var: time tendency of sea-surface height [m s^{-1}]
     # dim: (nCells), Time?)
     tendSSH::Array{F,1}
@@ -35,7 +35,7 @@ mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
 
         # pack all the arguments into a tuple for type and backend checking
         args = (tendNormalVelocity, tendLayerThickness)
-        
+
         # check the type names; irrespective of type parameters
         # (e.g. `Array` instead of `Array{Float64, 1}`)
         check_typeof_args(args)
@@ -46,11 +46,11 @@ mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
 
         new{type, AT2D}(tendNormalVelocity, tendLayerThickness)
     end
-end 
+end
 
 function TendencyVars(Config::GlobalConfig, Mesh::Mesh; backend=CUDABackend())
-        
-    @unpack HorzMesh, VertMesh = Mesh    
+
+    @unpack HorzMesh, VertMesh = Mesh
     @unpack PrimaryCells, Edges = HorzMesh
 
     nEdges = Edges.nEdges
@@ -58,13 +58,13 @@ function TendencyVars(Config::GlobalConfig, Mesh::Mesh; backend=CUDABackend())
     nVertLevels = VertMesh.nVertLevels
 
     # create zero vectors to store tendecy vars on the desired backend
-    tendNormalVelocity = zeros(Float64, nVertLevels, nEdges) 
+    tendNormalVelocity = zeros(Float64, nVertLevels, nEdges)
     tendLayerThickness = KA.zeros(backend, Float64, nVertLevels, nCells)
 
 
 
     TendencyVars(Adapt.adapt(backend, tendNormalVelocity), tendLayerThickness)
-end 
+end
 
 function axb!(a::Array{T,2}, x::T, b::Array{T,2}) where {T<:AbstractFloat}
     m,n = size(a)
@@ -76,5 +76,5 @@ function axb!(a::Array{T,2}, x::T, b::Array{T,2}) where {T<:AbstractFloat}
            a[i,j] += x*b[i,j]
         end
     end
-end 
+end
 
