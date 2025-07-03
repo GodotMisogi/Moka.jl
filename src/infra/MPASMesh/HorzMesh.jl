@@ -322,18 +322,17 @@ function signIndexField!(dualMesh::DualCells, edges::Edges)
 
     for iVertex in 1:nVertices, i in 1:vertexDegree
 
-        @inbounds iEdge = edgesOnVertex[i, iVertex]
+       @inbounds iEdge = edgesOnVertex[i, iVertex]
 
-        # if edge missing from vertex (i.e. vertex is on a culled boundary),
-        # then leave edgeSignOnVertex as undefined (i.e. zero)
-        if iEdge == 0 continue end
-
-        # vector points from cell 1 to cell 2
-        if iVertex == verticesOnEdge[1, iEdge]
-            @inbounds edgeSignOnVertex[i, iVertex] = -1
-        else
-            @inbounds edgeSignOnVertex[i, iVertex] = 1
-        end
+       # if edge missing from vertex (i.e. vertex is on a culled boundary),
+       # then leave edgeSignOnVertex as undefined (i.e. zero)
+       if iEdge == 0
+           @inbounds edgeSignOnVertex[i, iVertex] = 1
+       elseif iVertex == verticesOnEdge[1, iEdge]
+           @inbounds edgeSignOnVertex[i, iVertex] = -1
+       else
+           @inbounds edgeSignOnVertex[i, iVertex] = 1
+       end
     end
 
     # DualCell struct is immutable so need to use Accessor package,
