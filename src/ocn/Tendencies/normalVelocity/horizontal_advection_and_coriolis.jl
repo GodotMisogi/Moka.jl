@@ -65,8 +65,8 @@ end
         #if boundaryEdge[iEdge] != 0 continue end
 
         @inbounds eoe = edgesOnEdge[i, iEdge]
-        
-        if eoe == 0 break end 
+
+        #if eoe == 0 break end
 
         @inbounds for k in 1:maxLevelEdgeTop[iEdge]
             @inbounds tendency[k, iEdge] += weightsOnEdge[i, iEdge] *
