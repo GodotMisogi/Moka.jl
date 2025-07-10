@@ -232,6 +232,8 @@ function calculate_relativeVorticity!(Diag::DiagnosticVars,
     # unpack the relativeVorticity diagnostic term
     @unpack relativeVorticity = Diag
 
+    relativeVorticity .= 0.0
+
     #nthreads = 50
     kernel!  = compute_relativeVorticity!(backend)#, nthreads)
     # use kernel to compute diagnostic field
