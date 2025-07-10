@@ -164,19 +164,21 @@ end
 function calculate_velocityDivCell!(Diag::DiagnosticVars,
                                     Prog::PrognosticVars,
                                     Mesh::Mesh;
-                                    backend = KA.CPU()) 
-    
+                                    backend = KA.CPU())
+
+    @unpack HorzMesh, VertMesh = Mesh
+    @unpack PrimaryCells, DualCells, Edges = HorzMesh
+
+    nEdges = Edges.nEdges
+    nVertLevels = VertMesh.nVertLevels
+
     normalVelocity = Prog.normalVelocity[end]
+    velocityDivCell = Diag.velocityDivCell
 
-    # I think the issue is that this doesn't create a new array while the old version does... we need a
-    # new array for temporary data
+    # allocate a scratch array
+    scratch = KA.zeros(backend, eltype(normalVelocity), nVertLevels, nEdges)
 
-    # layerThicknessEdge is used here to temporarily store intermdeiate results. It will be reset when it is acually
-    # used as a diagnostic variable
-    @unpack velocityDivCell, layerThicknessEdge = Diag
-
-
-    DivergenceOnCell!(velocityDivCell, normalVelocity, layerThicknessEdge, Mesh; backend=backend)
+    DivergenceOnCell!(velocityDivCell, normalVelocity, scratch, Mesh; backend=backend)
 
     @pack! Diag = velocityDivCell
 end
