@@ -1,0 +1,62 @@
+
+%========= FORMATTING ===========% 
+\usepackage{tcolorbox}
+\usepackage{amsmath,amsfonts,amssymb,amsbsy,amsthm}
+\usepackage{physics}
+\usepackage{float}
+\usepackage{rotating}
+\usepackage{censor}
+\usepackage{multirow}
+\usepackage{subfig}
+\usepackage{setspace}
+\usepackage{mathtools}
+\usepackage{bbm,mathrsfs}
+\usepackage{lscape}
+
+\usepackage{fancyhdr}
+\fancyhead[L]{\scshape{Arjit Seth}}
+
+% \usepackage{amsart
+\makeatletter
+\newcommand\footnoteref[1]{\protected@xdef\@thefnmark{\ref{#1}}\@footnotemark}
+\makeatother
+
+\newtcolorbox{mybox}[3][]
+{
+  colframe = #2!30,
+  colback  = #2!20!,
+  coltitle = #2!20!black,  
+  title    = {\bfseries #3},
+  #1,
+}
+
+\usepackage{array,booktabs}              % Row formatting for tables
+    \newcolumntype{+}{>{\global\let\currentrowstyle\relax}}
+    \newcolumntype{^}{>{\currentrowstyle}}
+    \newcommand{\rowstyle}[1]{\gdef\currentrowstyle{#1}#1\ignorespaces}
+
+%% Font
+\usepackage[]{palatino}
+\linespread{1.05} % Palladio needs more leading (space between lines)
+\usepackage{inconsolata}
+\usepackage[T1]{fontenc}
+% \usepackage[]{sfmath}
+% \sfmath
+%==========REFERENCES=============%
+% \usepackage[numbers,sort]{natbib}
+
+\usepackage[bookmarksopen,bookmarksdepth=3]{hyperref}
+\usepackage[capitalize]{cleveref}
+\usepackage{doi} % For getting hyperlinked DOI in the references
+\usepackage[multiple]{footmisc}
+
+\DeclareMathOperator{\sgn}{sgn}
+
+\newcommand{\bs}{\boldsymbol}
+\newcommand{\etal}{\textit{et al.}}
+\newcommand{\eg}{\textit{e.g.}}
+\newcommand{\etc}{\textit{etc.}}
+\newcommand{\viz}{\textit{viz.}}
+
+\newtheorem{problem}{Problem}
+\renewcommand*{\proofname}{Solution}

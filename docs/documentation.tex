@@ -1,0 +1,178 @@
+\documentclass[12pt]{my-preprint}
+
+\input{preamble.tex}
+
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\title{\textbf{Codebase Documentation: Moka.jl \\ \large MPAS Ocean using Kernel Abstractions}}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent \texttt{Moka.jl} is a high-performance ocean model written in Julia, inspired by the Fortran-based MPAS-Ocean. It is capable of running on irregular, non-rectilinear, TRiSK-based meshes. The primary objective of this codebase is to provide a fast, flexible, and scalable shallow-water core that leverages Julia's high-level syntax while matching or exceeding the performance of compiled languages like Fortran. It utilizes \texttt{KernelAbstractions.jl} to achieve GPU acceleration, along with \texttt{MPI.jl} for distributed computing.
+\end{abstract}
+
+\section{Introduction}
+Initially built to test the viability of the Julia programming language for scientific high-performance computing (HPC) in climate modeling, \texttt{Moka.jl} implements a Shallow Water equation solver. The model was initially developed as a single-processor code and later extended for massively parallel environments such as NVIDIA/AMD GPUs and MPI clusters. In performance benchmarks, the GPU-accelerated code reports a significant $500\times$ speedup over the single-thread CPU implementation. 
+
+Currently, the solver handles gravity and Coriolis terms, focusing fundamentally on the linear dynamic terms rather than non-linear terms. Recent development work on the \texttt{develop} branch includes implementation of the barotropic gyre test case, which validates the model under realistic wind-driven ocean circulation scenarios with wind stress forcing.
+
+\section{Mathematical and Physical Scope}
+The model solves the Shallow Water Equations (SWE) over an irregular grid using a TRiSK (Thuburn, Ringler, Skamarock, and Klemp) spatial discretization approach.
+The governing equations typically calculated by the model involve:
+\begin{align}
+    \frac{\partial h}{\partial t} + \nabla \cdot (h \mathbf{v}) &= 0 \\
+    \frac{\partial \mathbf{v}}{\partial t} + (\mathbf{v} \cdot \nabla) \mathbf{v} + f \mathbf{k} \times \mathbf{v} &= -g \nabla h 
+\end{align}
+Where:
+\begin{itemize}
+    \item $h$ is the fluid layer thickness.
+    \item $\mathbf{v}$ is the horizontal velocity vector (calculated primarily as the normal velocity across cell edges).
+    \item $f$ is the Coriolis parameter.
+    \item $g$ is gravity.
+\end{itemize}
+
+The discrete implementations of spatial operators employed to model these physics in \texttt{Moka.jl} are adapted for TRiSK unstructured meshes:
+
+\begin{itemize}
+    \item \textbf{Divergence on Cell (\texttt{DivergenceOnCell!})} corresponds to:
+    \begin{equation}
+        [\nabla \cdot \mathbf{v}]_i = \frac{1}{A_i} \sum_{e \in \text{EC}(i)} \pm v_e l_e
+    \end{equation}
+    where $A_i$ is the area of the primary cell $i$, $v_e$ is the normal velocity on edge $e$, $l_e$ is the edge length (\texttt{dvEdge}), and $\pm$ is defined by \texttt{edgeSignOnCell}.
+
+    \item \textbf{Gradient on Edge (\texttt{GradientOnEdge!})} evaluates the gradient of variables (e.g., surface height) normal to the edge:
+    \begin{equation}
+        [\nabla h]_e = \frac{h_{\text{cell2}} - h_{\text{cell1}}}{d_e}
+    \end{equation}
+    where $d_e$ is the distance between the two primary cell centers (\texttt{dcEdge}).
+
+    \item \textbf{Curl on Vertex (\texttt{CurlOnVertex!})} calculates vorticity (curl of velocity) around a vertex (which acts as the center for a dual cell/triangle):
+    \begin{equation}
+        [\nabla \times \mathbf{v}]_v = \frac{1}{A_v} \sum_{e \in \text{EV}(v)} \pm v_e d_e
+    \end{equation}
+    where $A_v$ is the area of the dual triangle (\texttt{areaTriangle}).
+\end{itemize}
+
+In the current implementation of \texttt{Moka.jl}, the physics operators resolve the pressure gradient, horizontal momentum mixing, Coriolis effect, and horizontal advection for both velocity and layer thickness.
+
+\section{Codebase Architecture}
+The repository is modularly organized under the \texttt{src/} directory. It separates the infrastructure logic from the physical ocean logic.
+
+\subsection{Infrastructure (\texttt{src/infra/})}
+This module handles all the backend support necessary to manage the simulation context:
+\begin{itemize}
+    \item \textbf{MPASMesh}: Defines structures and parsers for TRiSK unstructured meshes. Contains definitions for \texttt{Cell}, \texttt{Edge}, and \texttt{Vertex}, as well as horizontal and vertical meshing algorithms (\texttt{HorzMesh.jl}, \texttt{VertMesh.jl}).
+    \item \textbf{TimeManager}: Responsible for handling timestamps, tracking simulation progression, and scheduling I/O or alarms.
+    \item \textbf{Config}: Loads YAML configurations that dictate simulation constants.
+    \item \textbf{Output}: Wraps \texttt{NCDatasets.jl} to generate predictable, NetCDF-formatted simulation dumps.
+\end{itemize}
+
+\subsection{Ocean Core (\texttt{src/ocn/})}
+The oceanic domain variables and differential operators are stored here:
+\begin{itemize}
+    \item \textbf{Operators.jl}: Defines fundamental spatial operations like \texttt{GradientOnEdge!}, \texttt{DivergenceOnCell!}, and \texttt{CurlOnVertex!}.
+    \item \textbf{Variables}: Separated into \texttt{PrognosticVars.jl} (variables integrated forward in time) and \texttt{DiagnosticVars.jl} (variables diagnosed from the prognostic state).
+    \item \textbf{Tendencies}: Computes the time tendencies (derivatives) for variables like layer thickness and normal velocity. It contains sub-modules handling pressure gradients, Coriolis forces, and horizontal momentum.
+\end{itemize}
+
+\subsection{Forward Integration (\texttt{src/forward/})}
+The lifecycle of the simulation loop is defined here:
+\begin{itemize}
+    \item \textbf{Time Integration}: Provides time-stepping schemes such as the classic 4th-order Runge-Kutta (\texttt{RungeKutta4}) and Forward Euler (\texttt{ForwardEuler}).
+    \item \textbf{Run Loop}: \texttt{run\_loop.jl} processes the main execution timestep cycle, updating prognostic variables based on computed tendencies.
+\end{itemize}
+
+\section{Test Cases and Validation}
+
+\subsection{Inertial-Gravity Wave Test Case}
+The inertial-gravity wave test case (\texttt{inertialGravityWave.jl}) represents a verification test case with an analytical solution, allowing assessment of the model's ability to accurately represent wave propagation on the $f$-plane. This test case validates the discretization and time integration schemes against known exact solutions.
+
+\subsection{Barotropic Gyre Test Case}
+Developed on the \texttt{develop} branch, the barotropic gyre test case represents a realistic oceanographic scenario. It models the forced response of a shallow-water ocean to wind stress forcing over a rectangular domain. The governing physics includes:
+
+\begin{itemize}
+    \item \textbf{Wind Stress Forcing}: The surface wind stress is specified as a cosine profile in the zonal direction:
+    \begin{equation}
+        \tau_x = -\tau_0 \cos\left(\pi \frac{x}{L_x}\right), \quad \tau_y = 0
+    \end{equation}
+    where $\tau_0$ is the maximum wind stress amplitude, $x$ is the zonal coordinate, and $L_x$ is the domain width.
+    
+    \item \textbf{Linear Coriolis Effect}: The Coriolis parameter varies linearly with latitude (the $\beta$-plane approximation):
+    \begin{equation}
+        f(y) = f_0 + \beta y
+    \end{equation}
+    where $f_0$ is the reference Coriolis parameter and $\beta$ is the planetary vorticity gradient.
+    
+    \item \textbf{Biharmonic Viscosity}: Horizontal momentum diffusion with a biharmonic operator parameterized by $\nu_2$ (hyperviscosity coefficient) to dissipate energy at small scales.
+    
+    \item \textbf{Munk Boundary Layer}: Under these forcing conditions, the solution exhibits a boundary layer structure characterized by the Munk layer thickness:
+    \begin{equation}
+        \delta_M = \left(\frac{\nu_2}{\beta}\right)^{1/3}
+    \end{equation}
+\end{itemize}
+
+The barotropic gyre configuration is defined in \texttt{examples/barotropic\_gyre/}, including mesh generation via the MPAS Python tools and initialization of the wind stress field. The exact solution for the barotropic gyre includes a complex structure balancing wind forcing, Coriolis deflection, and viscous dissipation.
+
+\subsection{Comparison with MITgcm Barotropic Gyre Tutorial}
+
+The \texttt{Moka.jl} barotropic gyre implementation shares fundamental physics with the widely-used MITgcm tutorial example, but differs significantly in implementation details and computational approach:
+
+\subsubsection{Similarities}
+
+Both implementations solve the linearized shallow-water equations with identical physics components:
+
+\begin{itemize}
+    \item \textbf{Governing Equations}: Both use the same shallow-water momentum and continuity equations with wind stress forcing, Coriolis acceleration, and pressure gradients.
+    
+    \item \textbf{Domain Configuration}: Rectangular domains ($1200 \times 1200$ km) with enclosed boundaries (solid walls or non-periodic conditions).
+    
+    \item \textbf{Wind Forcing}: Zonal wind stress with cosine profile:
+    \begin{equation}
+        \tau_x(y) = -\tau_0 \cos\left(\pi \frac{y}{L_y}\right)
+    \end{equation}
+    where MITgcm uses $\tau_0 = 0.1$ N m$^{-2}$ and \texttt{Moka.jl} uses the same magnitude.
+    
+    \item \textbf{Coriolis Parameters}: Both employ $\beta$-plane approximation with $f_0 = 10^{-4}$ s$^{-1}$ and $\beta = 10^{-11}$ m$^{-1}$s$^{-1}$.
+    
+    \item \textbf{Munk Layer Theory}: Both employ horizontal viscosity parameterized to resolve the Munk boundary layer, with characteristic thickness $\delta_M = (\nu_2/\beta)^{1/3}$. MITgcm uses $A_h = 400$ m$^2$ s$^{-1}$, while \texttt{Moka.jl} uses $\nu_2 = 4 \times 10^2$ m$^2$ s$^{-1}$ (equivalent).
+\end{itemize}
+
+\subsubsection{Key Differences}
+
+\begin{itemize}
+    \item \textbf{Mesh Type}: MITgcm uses a structured, Cartesian Arakawa C-grid with uniform $20$ km spacing ($62 \times 62$ grid cells with boundary layers). \texttt{Moka.jl} uses unstructured hexagonal meshes (generated via MPAS tools) with variable resolution control, enabling easier AMR and mesh refinement studies.
+    
+    \item \textbf{Spatial Discretization}: MITgcm employs finite-volume methods on structured grids with explicit staggering of scalars and vectors. \texttt{Moka.jl} uses TRiSK discretization on Voronoi meshes, allowing cell-edge normal velocities and flexible unstructured geometry.
+    
+    \item \textbf{Time Integration}: MITgcm uses Adams-Bashforth-2 multistep schemes with implicit free-surface formulation and a 2-D pressure solver. \texttt{Moka.jl} uses explicit multistep methods (Runge-Kutta-4 or Forward Euler) with explicit free-surface evolution.
+    
+    \item \textbf{Computational Backend}: MITgcm is Fortran-based with OpenMP/MPI parallelization. \texttt{Moka.jl} leverages Julia's \texttt{KernelAbstractions.jl} for portable GPU execution via CUDA or AMDGPU, achieving significant speedup on accelerators.
+    
+    \item \textbf{Vertical Structure}: MITgcm's tutorial uses a single vertical layer ($\Delta z = 5000$ m). \texttt{Moka.jl} supports multiple vertical levels via z-star coordinate system (as specified in configuration).
+    
+    \item \textbf{Boundary Conditions}: MITgcm explicitly encodes solid-wall boundaries via land-cell masking (bathymetry array). \texttt{Moka.jl} achieves non-periodic boundaries through the MPAS mesh generation (configured via \texttt{nonperiodic\_x}, \texttt{nonperiodic\_y} flags).
+    
+    \item \textbf{Code Complexity}: MITgcm's tutorial is a comprehensive, production-ready framework with extensive configuration namelist parameters, checkpoint/restart functionality, and diagnostic infrastructure. \texttt{Moka.jl} is a research prototype focused on demonstrating Julia's HPC capabilities with cleaner, more concise computational kernels.
+    
+    \item \textbf{Numerical Stability}: MITgcm prescribes strict CFL and friction stability criteria (e.g., $S_{\text{adv}} < 0.5$, $S_{\text{inert}} < 0.5$). \texttt{Moka.jl} inherits stability from its explicit time-stepping but provides less built-in guidance for parameter selection.
+\end{itemize}
+
+The \texttt{Moka.jl} barotropic gyre serves as validation that the Julia-based shallow-water solver produces physically consistent results on the same benchmark problem as MITgcm, while demonstrating the advantages of unstructured meshing and GPU-accelerated computation.
+
+\section{Performance and Execution}
+\texttt{Moka.jl} depends heavily on \texttt{KernelAbstractions.jl}, which allows developers to write computational kernels once and compile them for both CPU threading and GPU execution (via \texttt{CUDA.jl} or \texttt{AMDGPU.jl}). This architecture removes the necessity to maintain separate Fortran/CPU and CUDA/GPU codebases.
+
+Additionally, the codebase inherently supports MPI via \texttt{MPI.jl}, permitting users to span a simulation over multiple nodes on distributed HPC architectures. The repository also incorporates testing hooks with \texttt{Enzyme.jl} (\texttt{MPASEnzymeExt.jl}) for automatic differentiation (AD).
+
+\section{Conclusion}
+\texttt{Moka.jl} serves as an ongoing proof-of-concept for how modern language features like multiple dispatch, meta-programming, and automatic kernel compilation natively found in Julia can be employed to radically simplify the development iteration loop of global climate and ocean models without sacrificing execution speed. Current development on the \texttt{develop} branch extends the model capabilities to include realistic wind-driven ocean circulation test cases such as the barotropic gyre, advancing the validation and applicability of the Julia-based ocean modeling framework.
+
+\end{document}
