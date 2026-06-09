@@ -11,3 +11,23 @@ InertiaGravityWaveMesh.tar.gz
 InertiaGravityWaveMesh/
 output.tar.gz
 sbatch_logs/
+
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Ignore MacOS specific files
+.DS_Store
