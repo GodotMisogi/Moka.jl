@@ -21,6 +21,10 @@ units = "m"
 dimensions = ["nVertLevels", "nEdges", "time"]
 units = "m"
 
+[diagnostics.layerThicknessVertex]
+dimensions = ["nVertLevels", "nVertices", "time"]
+units = "m"
+
 [diagnostics.thicknessFlux]
 dimensions = ["nVertLevels", "nEdges", "time"]
 units = "m s-1"
@@ -29,6 +33,22 @@ units = "m s-1"
 dimensions = ["nVertLevels", "nCells", "time"]
 units = "s-1"
 
-[diagnostics.relativeVorticity]
+[diagnostics.relativeVorticityVertex]
 dimensions = ["nVertLevels", "nVertices", "time"]
 units = "s-1"
+
+[diagnostics.norm_rel_vort_vertex]
+dimensions = ["nVertLevels", "nVertices", "time"]
+units = "s-1 m-1"
+
+[diagnostics.norm_rel_vort_edge]
+dimensions = ["nVertLevels", "nEdges", "time"]
+units = "s-1 m-1"
+
+[diagnostics.norm_planet_vort_vertex]
+dimensions = ["nVertLevels", "nVertices", "time"]
+units = "s-1 m-1"
+
+[diagnostics.norm_planet_vort_edge]
+dimensions = ["nVertLevels", "nEdges", "time"]
+units = "s-1 m-1"

@@ -9,7 +9,7 @@ struct ForcingVars{OA}
     #      pointing in the direction of the edge normal. Field is the sum of
     #      constituent stresses (e.g. wind stress) and is used to compute the
     #      tendency in the normal velocity
-    # dim: nEdges [time eventually 
+    # dim: nEdges [time eventually
     # units: N m$^{-2}$
     surfaceStress::OA
 end
@@ -18,10 +18,10 @@ end
 ForcingVars() = ForcingVars(nothing)
 
 function ForcingVars(config::GlobalConfig, mesh::Mesh; backend=KA.CPU())
-    
+
     # try reading the forcing section of the streams
     local forcingConfig
-    try 
+    try
         forcingConfig = ConfigGet(config.streams, "forcing")
     catch e
         # if forcing section is missing return null forcing object
@@ -34,7 +34,7 @@ function ForcingVars(config::GlobalConfig, mesh::Mesh; backend=KA.CPU())
     end
 
     forcing_filename = ConfigGet(forcingConfig, "filename_template")
-    
+
     # Can forcing "type" be anything other than "input"?
     # TODO: Support time dependent forcing
     if ConfigGet(forcingConfig, "input_interval") != "initial_only"
@@ -59,13 +59,13 @@ function surface_bulk_forcing_vel(forcing_fn::String, mesh::Mesh)
 
    # open the forcing file
    forcing_ds = NCDataset(forcing_fn)
-    
+
    f(var) = haskey(forcing_ds, var)
    if !all(map(v -> haskey(forcing_ds, v), ["windStressZonal", "windStressMeridional"]))
        @error "Forcing dataset does not contain the variables needed"
    end
 
-   # Pre-allocate zero indexed offsetarrays on the CPU 
+   # Pre-allocate zero indexed offsetarrays on the CPU
    windStressZonal = padded_array(nCells; eltype=Float64)
    windStressMerid = padded_array(nCells; eltype=Float64)
 
@@ -73,7 +73,7 @@ function surface_bulk_forcing_vel(forcing_fn::String, mesh::Mesh)
    windStressZonal[1:end] = forcing_ds["windStressZonal"][:, 1]
    windStressMerid[1:end] = forcing_ds["windStressMeridional"][:, 1]
 
-   # allocate the surface stress array to store the bulk forcing in 
+   # allocate the surface stress array to store the bulk forcing in
    # TODO: paramertize the type to support single precision runs
    sfcStress = zeros(Float64, nEdges)
 
@@ -84,7 +84,7 @@ function surface_bulk_forcing_vel(forcing_fn::String, mesh::Mesh)
        # mpas_vector_cell_to_edge_anisotropic
        zonalWSEdge = 0.5 * (windStressZonal[iCell1] + windStressZonal[iCell2])
        meridWSEdge = 0.5 * (windStressMerid[iCell1] + windStressMerid[iCell2])
-       
+
        sfcStress[iEdge] = cos(angleEdge[iEdge]) * zonalWSEdge +
                           sin(angleEdge[iEdge]) * meridWSEdge
    end

@@ -129,7 +129,7 @@ end
 end
 
 # (D)ual mesh cell
-@kwdef struct DualCells{I, FV, IM}
+@kwdef struct DualCells{I, FV, IM, FM}
     # I   --> (I)nt
     # FV  --> (F)loat (V)ector
     # IV  --> (I)int  (V)ector
@@ -156,6 +156,9 @@ end
 
     # area of triangle
     areaTriangle::FV
+
+    # kite areas
+    kiteAreasOnVertex::FM
 end
 
 stack(arr, N) = [Tuple(arr[:,i]) for i in 1:N]
@@ -232,13 +235,15 @@ function readDualMesh(ds::NCDataset)
 
     # Triangle area
     areaTriangle = ds["areaTriangle"][:]
+    kiteAreasOnVertex = ds["kiteAreasOnVertex"][:, :]
 
     DualCells(nVertices = nVertices, vertexDegree = vertexDegree,
               xᵛ = xᵛ, yᵛ = yᵛ, zᵛ = zᵛ, fᵛ = fᵛ,
               edgesOnVertex = edgesOnVertex,
               cellsOnVertex = cellsOnVertex,
               edgeSignOnVertex = edgeSignOnVertex,
-              areaTriangle = areaTriangle)
+              areaTriangle = areaTriangle,
+              kiteAreasOnVertex = kiteAreasOnVertex)
 end
 
 function readEdgeInfo(ds::NCDataset)
@@ -252,10 +257,11 @@ function readEdgeInfo(ds::NCDataset)
     zᵉ = OffsetArray(ds["zEdge"][:])
 
     if haskey(ds, "fEdge")
-        fᵉ = OffsetArray(ds["fEdge"][:])
+        fᵉ = padded_array(nEdges; eltype=Float64)
+        fᵉ[1:end] = ds["fEdge"][:]
     else
         # initalize coriolis as zero b/c not included in the base mesh
-        fᵉ = zeros(eltype(xᵉ), nEdges)
+        fᵉ = padded_array(nEdges; eltype=Float64)
     end
 
     nEdgesOnEdge = OffsetArray(ds["nEdgesOnEdge"][:])
@@ -418,5 +424,6 @@ function Adapt.adapt_structure(to, duals::DualCells)
                      edgesOnVertex = Adapt.adapt(to, duals.edgesOnVertex),
                      cellsOnVertex = Adapt.adapt(to, duals.cellsOnVertex),
                      edgeSignOnVertex = Adapt.adapt(to, duals.edgeSignOnVertex),
-                     areaTriangle = Adapt.adapt(to, duals.areaTriangle))
+                     areaTriangle = Adapt.adapt(to, duals.areaTriangle),
+                     kiteAreasOnVertex = Adapt.adapt(to, duals.kiteAreasOnVertex))
 end

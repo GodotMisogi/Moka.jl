@@ -23,6 +23,8 @@ function horizontal_advection_and_coriolis_tendency!(Tend::TendencyVars,
     @unpack nEdges, nEdgesOnEdge, edgeMask = Edges
     @unpack weightsOnEdge, fᵉ, cellsOnEdge, edgesOnEdge = Edges
 
+    @unpack layerThicknessEdge = Diag
+    @unpack norm_rel_vort_edge, norm_planet_vort_edge = Diag
     # get the current timelevel of normalVelocity
     normalVelocity = Prog.normalVelocity[end]
     # unpack the normal velocity tendency term
@@ -34,7 +36,9 @@ function horizontal_advection_and_coriolis_tendency!(Tend::TendencyVars,
     # use kernel to compute coriolis and horizontal advection
     kernel!(tendNormalVelocity,
             normalVelocity,
-            fᵉ,
+            layerThicknessEdge,
+            norm_rel_vort_edge,
+            norm_planet_vort_edge,
             nEdgesOnEdge,
             edgesOnEdge,
             maxLevelEdge.Top,
@@ -50,7 +54,9 @@ end
 
 @kernel function coriolis_force_tendency_kernel!(tendency,
                                                  @Const(normalVelocity),
-                                                 @Const(fᵉ),
+                                                 @Const(layerThicknessEdge),
+                                                 @Const(norm_rel_vort_edge),
+                                                 @Const(norm_planet_vort_edge),
                                                  @Const(nEdgesOnEdge),
                                                  @Const(edgesOnEdge),
                                                  @Const(maxLevelEdgeTop),
@@ -60,18 +66,19 @@ end
     # global indices over nEdges
     iEdge = @index(Global, Linear)
 
-    @inbounds for i in 1:nEdgesOnEdge[iEdge]
+    @inbounds for j in 1:nEdgesOnEdge[iEdge]
 
-        #if boundaryEdge[iEdge] != 0 continue end
-
-        @inbounds eoe = edgesOnEdge[i, iEdge]
-
-        #if eoe == 0 break end
+        @inbounds @private jEdge = edgesOnEdge[j, iEdge]
 
         @inbounds for k in 1:maxLevelEdgeTop[iEdge]
-            @inbounds tendency[k, iEdge] += weightsOnEdge[i, iEdge] *
-                                            normalVelocity[k, eoe] *
-                                            fᵉ[eoe] * edgeMask[k, iEdge]
+            @inbounds @private normVorticity = 0.5 *
+            (norm_rel_vort_edge[k, iEdge] + norm_planet_vort_edge[k, iEdge] +
+             norm_rel_vort_edge[k, jEdge] + norm_planet_vort_edge[k, jEdge] )
+
+            @inbounds tendency[k, iEdge] += weightsOnEdge[j, iEdge] *
+                                            normalVelocity[k, jEdge] *
+                                            layerThicknessEdge[k, jEdge] *
+                                            normVorticity * edgeMask[k, iEdge]
         end
     end
 end

@@ -25,7 +25,7 @@ function horizontal_momentum_mixing_tendency!(Tend::TendencyVars,
     # unpack the normal velocity tendency term
     @unpack tendNormalVelocity = Tend
     # get needed fields from diagnostics structure
-    @unpack velocityDivCell, relativeVorticity = Diag
+    @unpack velocityDivCell, relativeVorticityVertex = Diag
 
     viscDel2 = 400.0
 
@@ -35,7 +35,7 @@ function horizontal_momentum_mixing_tendency!(Tend::TendencyVars,
     # use kernel to compute horizontal momentum mixing
     kernel!(tendNormalVelocity,
             velocityDivCell,
-            relativeVorticity,
+            relativeVorticityVertex,
             cellsOnEdge,
             verticesOnEdge,
             dcEdge,

@@ -10,7 +10,7 @@ end
 function validate_output_variables(output_variables)
     for var in output_variables
         if String(var) ∉ supported_variables
-            @warn "$(var) is a supported output variable"
+            @warn "$(var) is not a supported output variable"
         end
     end
-end  
+end

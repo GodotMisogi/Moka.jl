@@ -61,6 +61,6 @@ end
     # should be divided by full column thickness
     for k in 1:maxLevelEdgeTop[iEdge]
         tendency[k, iEdge] += edgeMask[k, iEdge] * sfcStress[iEdge] /
-                              layerThicknessEdge[k, iEdge] / 1000.
+                              (layerThicknessEdge[k, iEdge] * 1026.)
     end
 end
