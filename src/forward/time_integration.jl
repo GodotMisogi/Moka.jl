@@ -58,92 +58,59 @@ end
     @synchronize()
 end
 
-function ocn_timestep(Prog::PrognosticVars,
+function ocn_timestep(_timestep,
+                      Prog::PrognosticVars,
                       Diag::DiagnosticVars,
                       Tend::TendencyVars,
+                      Forcing::ForcingVars,
                       S::ModelSetup,
                       ::Type{RungeKutta4};
                       backend = KA.CPU())
 
     Mesh = S.mesh
     Clock = S.timeManager
+    Config = S.config
 
-    # advance the timelevels within the state strcut
     advanceTimeLevels!(Prog; backend=backend)
 
-    # convert the timestep to seconds
     dt = convert(Float64, Dates.value(Second(Clock.timeStep)))
 
     a = [dt/2., dt/2., dt]
     b = [dt/6., dt/3., dt/3., dt/6.]
 
-    # lets assume that we've already swapped time dimensions so that the
-    # end-1 position is the "current" timestep and the "end" position can be
-    # the "next" timestep, which itself is actually the substeps of the RK
-    # method.
-    #
-    #@views begin
-    #    normalVelocityCurr = Prog.normalVelocity[:,:,end-1]
-    #    layerThicknessCurr = Prog.layerThickness[:,:,end-1]
-    #    normalVelocityProvis = Prog.normalVelocity[:,:,end]
-    #    layerThicknessProvis = Prog.layerThickness[:,:,end]
-    #end
-
-    sshCurr = @view Prog.ssh[:,end-1]
-    normalVelocityCurr = @view Prog.normalVelocity[:,:,end-1]
-    layerThicknessCurr = @view Prog.layerThickness[:,:,end-1]
-
-    sshProvis = @view Prog.ssh[:,end]
+    normalVelocityCurr   = @view Prog.normalVelocity[:,:,end-1]
+    layerThicknessCurr   = @view Prog.layerThickness[:,:,end-1]
     normalVelocityProvis = @view Prog.normalVelocity[:,:,end]
     layerThicknessProvis = @view Prog.layerThickness[:,:,end]
 
-    # unpack the state variable arrays
     @unpack ssh, normalVelocity, layerThickness = Prog
 
-    # this will be the t+1 timestep, i.e. it's the array the rk4 updates are
-    # accumulated into, not this is NOT a view b/c that would have the substeps
-    # being overwritten byt the accumulate step.
-    #normalVelocityNew = normalVelocity[:,:,end-1]
-    sshNew = ssh[:,end]
-    normalVelocityNew = normalVelocity[:,:,end]
-    layerThicknessNew = layerThickness[:,:,end]
+    # accumulation arrays — copies, not views, so substep overwrites don't corrupt them
+    normalVelocityNew  = normalVelocity[:,:,end]
+    layerThicknessNew  = layerThickness[:,:,end]
 
     for RK_step in 1:4
-        # compute tenedencies using the provis state
-        computeTendency!(Mesh, Diag, Prog, Tend, :normalVelocity)
-        computeTendency!(Mesh, Diag, Prog, Tend, :layerThickness)
+        computeNormalVelocityTendency!(Tend, Prog, Diag, Mesh, Forcing, Config; backend=backend)
+        computeLayerThicknessTendency!(Tend, Prog, Diag, Mesh, Config; backend=backend)
 
-        # unpack the tendecies for updating the substep state.
         @unpack tendNormalVelocity, tendLayerThickness = Tend
 
-        # update the substep state which is storred in the final time postion
-        # of the Prog structure
         if RK_step < 4
-
-            normalVelocityProvis .= normalVelocityCurr .+ a[RK_step] .* tendNormalVelocity
-            layerThicknessProvis .= layerThicknessCurr .+ a[RK_step] .* tendLayerThickness
-            # compute ssh from layerThickness
-            sshProvis = layerThicknessProvis .- sum(Mesh.VertMesh.restingThickness; dims=1)
-            # compute the diagnostics using the Provis State,
-            # i.e. the substage solution
-            diagnostic_compute!(Mesh, Diag, Prog)
+            normalVelocityProvis  .= normalVelocityCurr  .+ a[RK_step] .* tendNormalVelocity
+            layerThicknessProvis  .= layerThicknessCurr  .+ a[RK_step] .* tendLayerThickness
+            diagnostic_compute!(Mesh, Diag, Prog; backend=backend)
         end
 
-        # accumulate the update in the NEW time position array
         normalVelocityNew .= normalVelocityNew .+ b[RK_step] .* tendNormalVelocity
         layerThicknessNew .= layerThicknessNew .+ b[RK_step] .* tendLayerThickness
-        sshNew = layerThicknessNew .- sum(Diag.restingThickness; dims=1)
     end
 
-    # place the NEW solution in the appropriate location in the Prog arrays
     normalVelocity[:,:,end] = normalVelocityNew
     layerThickness[:,:,end] = layerThicknessNew
 
-    # put the updated solution back in the Prog strcutre
     @pack! Prog = ssh, normalVelocity, layerThickness
 
-    ## compute diagnostics for new state
-    diagnostic_compute!(Mesh, Diag, Prog)
+    diagnostic_compute!(Mesh, Diag, Prog; backend=backend)
 end
 
 function ocn_timestep(timestep,
