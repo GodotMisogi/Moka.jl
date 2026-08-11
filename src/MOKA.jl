@@ -33,6 +33,7 @@ module MOKA
 
 
     include("ocn/Operators.jl")
+    include("ocn/EOS.jl")
     include("ocn/PrognosticVars.jl")
     include("ocn/DiagnosticVars.jl")
 
@@ -43,6 +44,7 @@ module MOKA
     include("ocn/Tendencies/TendencyVars.jl")
     include("ocn/Tendencies/normalVelocity/normalVelocity.jl")
     include("ocn/Tendencies/layerThickness/layerThickness.jl")
+    include("ocn/Tendencies/tracer/tracer.jl")
 
     include("forward/init.jl")
     include("forward/time_integration.jl")
@@ -54,4 +56,6 @@ module MOKA
     using .MPASMesh
     using .NormalVelocity
     using .LayerThickness
+    using .Tracer
+    using .EquationOfState
 end

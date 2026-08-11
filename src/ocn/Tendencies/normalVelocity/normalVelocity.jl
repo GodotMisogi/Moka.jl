@@ -32,6 +32,7 @@ function compute_normal_velocity_tendency!(Tend::TendencyVars,
                                         Diag::DiagnosticVars,
                                         Mesh::Mesh;
                                         coriolis::Type{<:Coriolis}=linearCoriolis,
+                                        pressure_gradient::Type{<:PressureGradient}=sshGradient,
                                         forcings::Tuple=(WindForcing,),
                                         viscDel2=Mesh.HorzMesh.Edges.momentumDel2,
                                         nthreads=DEFAULT_NTHREADS)
@@ -42,7 +43,7 @@ function compute_normal_velocity_tendency!(Tend::TendencyVars,
     kernel!(Tend.tendNormalVelocity, nEdges, ndrange=(nEdges, nVertLevels))
 
     pressure_gradient_tendency!(
-        Tend, Prog, Diag, Mesh, sshGradient; nthreads=nthreads)
+        Tend, Prog, Diag, Mesh, pressure_gradient; nthreads=nthreads)
 
     horizontal_advection_and_coriolis_tendency!(
         Tend, Prog, Diag, Mesh, coriolis; nthreads=nthreads)

@@ -47,10 +47,12 @@ function ocn_init(Config_filepath; backend=KA.CPU())
     # instead should happen within the `ocn_run` method, prior to entering 
     # the first time integration loop to ensure values are initialized 
     Diag = DiagnosticVars(Mesh; backend=backend)
-    Tend = TendencyVars(Mesh; backend=backend)
+    # size the tracer tendency to match the prognostic tracer group
+    nTracers = size(Prog.tracers[end], 1)
+    Tend = TendencyVars(Mesh; backend=backend, nTracers=nTracers)
 
     return Setup, Diag, Tend, Prog
-end 
+end
 
 """
     ocn_init_shadows(Prog, Diag, Tend; backend=KernelAbstractions.CPU())

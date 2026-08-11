@@ -63,6 +63,16 @@ mutable struct DiagnosticVars{F <: AbstractFloat, FV2 <: AbstractArray{F,2}}
     # dim: (nVertLevels, nVertices)
     potentialVorticityVertex::FV2
 
+    # --- Baroclinic pressure (Phase 5) ---------------------------------------
+    # Filled only by the `baroclinicGradient` pressure term (from the density
+    # diagnosed via the EOS); zero and unused under the default `sshGradient`.
+
+    # var: density on cells [kg m^{-3}]; dim: (nVertLevels, nCells)
+    density::FV2
+
+    # var: hydrostatic pressure on cells [Pa]; dim: (nVertLevels, nCells)
+    pressure::FV2
+
     #= Performance Note:
     # ###########################################################
     #  While these can be stored as diagnostic variales I don't
@@ -86,12 +96,14 @@ mutable struct DiagnosticVars{F <: AbstractFloat, FV2 <: AbstractArray{F,2}}
                             relativeVorticity::AT2D,
                             kineticEnergyCell::AT2D,
                             layerThicknessVertex::AT2D,
-                            potentialVorticityVertex::AT2D) where {AT2D}
+                            potentialVorticityVertex::AT2D,
+                            density::AT2D,
+                            pressure::AT2D) where {AT2D}
         # pack all the arguments into a tuple for type and backend checking
         args = (layerThicknessEdge, thicknessFlux,
                 velocityDivCell, relativeVorticity,
                 kineticEnergyCell, layerThicknessVertex,
-                potentialVorticityVertex)
+                potentialVorticityVertex, density, pressure)
 
         # check the type names; irrespective of type parameters
         # (e.g. `Array` instead of `Array{Float64, 1}`)
@@ -107,7 +119,9 @@ mutable struct DiagnosticVars{F <: AbstractFloat, FV2 <: AbstractArray{F,2}}
                         relativeVorticity,
                         kineticEnergyCell,
                         layerThicknessVertex,
-                        potentialVorticityVertex)
+                        potentialVorticityVertex,
+                        density,
+                        pressure)
     end
 end
 
@@ -133,6 +147,8 @@ function DiagnosticVars(Mesh::Mesh; backend=KA.CPU())
     kineticEnergyCell = KA.zeros(backend, Float64, nVertLevels, nCells)
     layerThicknessVertex = KA.zeros(backend, Float64, nVertLevels, nVertices)
     potentialVorticityVertex = KA.zeros(backend, Float64, nVertLevels, nVertices)
+    density = KA.zeros(backend, Float64, nVertLevels, nCells)
+    pressure = KA.zeros(backend, Float64, nVertLevels, nCells)
 
     DiagnosticVars(layerThicknessEdge,
                    thicknessFlux,
@@ -140,7 +156,9 @@ function DiagnosticVars(Mesh::Mesh; backend=KA.CPU())
                    relativeVorticity,
                    kineticEnergyCell,
                    layerThicknessVertex,
-                   potentialVorticityVertex)
+                   potentialVorticityVertex,
+                   density,
+                   pressure)
 end
 
 function Adapt.adapt_structure(to, x::DiagnosticVars)
@@ -150,7 +168,9 @@ function Adapt.adapt_structure(to, x::DiagnosticVars)
                           Adapt.adapt(to, x.relativeVorticity),
                           Adapt.adapt(to, x.kineticEnergyCell),
                           Adapt.adapt(to, x.layerThicknessVertex),
-                          Adapt.adapt(to, x.potentialVorticityVertex))
+                          Adapt.adapt(to, x.potentialVorticityVertex),
+                          Adapt.adapt(to, x.density),
+                          Adapt.adapt(to, x.pressure))
 end
 
 function diagnostic_compute!(Mesh::Mesh,

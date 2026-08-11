@@ -48,32 +48,39 @@ function advance_time_levels!(Prog::PrognosticVars; nthreads=DEFAULT_NTHREADS)
 
     kernel2d! = advance_2d_array(backend, nthreads)
     kernel3d! = advance_3d_array(backend, nthreads)
-    
-    for field_name in propertynames(Prog)
-         
-        ndim = field_name == :ssh ? 1 : 2
 
-        field = getproperty(Prog, field_name)
-        
-        if length(field) > 2 error("nTimeLevels must be <= 2") end
+    # Fields are advanced explicitly (rather than via propertynames) because they
+    # differ in rank: ssh is 1-D, normalVelocity/layerThickness are 2-D
+    # (level, col), and tracers is 3-D (tracer, level, cell). A generic loop would
+    # mis-rank the tracers field.
+    (length(Prog.ssh) > 2 || length(Prog.layerThickness) > 2) &&
+        error("nTimeLevels must be <= 2")
 
-        # Here: set first entry of Vector{Array} equal to second
-
-        # some short hand for this would be nice
-        if ndim == 1
-            #field[:,end-1] .= field[:,end]
-            #@show size(field), size(field)[1]
-            kernel2d!(field[1], field[2], size(field[1])[1], ndrange=size(field[1])[1])
-        else
-            #field[:,:,end-1] .= field[:,:,end]
-            # 2-D launch over (ncols, nVertLevels) so every level is advanced.
-            nlevels = size(field[1])[1]
-            ncols   = size(field[1])[2]
-            kernel3d!(field[1], field[2], ncols, ndrange=(ncols, nlevels))
+    # ssh (1-D per level)
+    let field = Prog.ssh
+        kernel2d!(field[1], field[2], size(field[1])[1], ndrange=size(field[1])[1])
+        setproperty!(Prog, :ssh, field)
+    end
+    # normalVelocity, layerThickness (2-D per level; advance every level)
+    for name in (:normalVelocity, :layerThickness)
+        field = getproperty(Prog, name)
+        nlevels = size(field[1])[1]
+        ncols   = size(field[1])[2]
+        kernel3d!(field[1], field[2], ncols, ndrange=(ncols, nlevels))
+        setproperty!(Prog, name, field)
+    end
+    # tracers (3-D per level: (nTracers, nVertLevels, nCells)); skip when empty
+    let field = Prog.tracers
+        nTracers = size(field[1])[1]
+        if nTracers > 0
+            nlevels = size(field[1])[2]
+            ncols   = size(field[1])[3]
+            kernelT! = advance_tracer_array(backend, nthreads)
+            kernelT!(field[1], field[2], nTracers, nlevels, ncols,
+                     ndrange=(ncols, nlevels, nTracers))
+            setproperty!(Prog, :tracers, field)
         end
-
-        setproperty!(Prog, field_name, field)
-    end 
+    end
 end
 
 @kernel function advance_2d_array(fieldPrev, fieldNext, arrayLength)
@@ -88,6 +95,15 @@ end
     j, k = @index(Global, NTuple)
     if j < arrayLength + 1
         @inbounds fieldPrev[k, j] = fieldNext[k, j]
+    end
+    @synchronize()
+end
+
+# Advance one tracer time level: (nTracers, nVertLevels, nCells).
+@kernel function advance_tracer_array(fieldPrev, fieldNext, nTracers, nlevels, ncols)
+    iCell, k, t = @index(Global, NTuple)
+    if iCell < ncols + 1
+        @inbounds fieldPrev[t, k, iCell] = fieldNext[t, k, iCell]
     end
     @synchronize()
 end
@@ -230,6 +246,7 @@ function ocn_timestep(timestep,
                       coriolis=MOKA.NormalVelocity.linearCoriolis,
                       forcings=(MOKA.NormalVelocity.WindForcing,),
                       viscDel2=Mesh.HorzMesh.Edges.momentumDel2,
+                      tracerDel2::Float64=0.0,
                       nthreads=DEFAULT_NTHREADS)
     backend = KernelAbstractions.get_backend(Prog.ssh[end])
 
@@ -237,7 +254,7 @@ function ocn_timestep(timestep,
     advance_time_levels!(Prog; nthreads=nthreads)
 
     # unpack the state variable arrays
-    @unpack ssh, normalVelocity, layerThickness = Prog
+    @unpack ssh, normalVelocity, layerThickness, tracers = Prog
 
     # compute the diagnostics
     diagnostic_compute!(Mesh, Diag, Prog; nthreads=nthreads)
@@ -247,6 +264,10 @@ function ocn_timestep(timestep,
 
     # compute layerThickness tendency
     compute_layer_thickness_tendency!(Tend, Prog, Diag, Mesh; nthreads=nthreads)
+
+    # compute tracer tendency (no-op when there are no tracers)
+    MOKA.Tracer.compute_tracer_tendency!(Tend, Prog, Diag, Mesh;
+                                         tracerDel2=tracerDel2, nthreads=nthreads)
 
     # update the state variables by the tendencies
     nEdges      = Mesh.HorzMesh.Edges.nEdges
@@ -258,13 +279,30 @@ function ocn_timestep(timestep,
     tendKernel!(normalVelocity[end], Tend.tendNormalVelocity, timestep, nEdges, ndrange=(nEdges, nVertLevels))
     tendKernel!(layerThickness[end], Tend.tendLayerThickness, timestep, nCells, ndrange=(nCells, nVertLevels))
 
+    # forward-euler update of every tracer (skip when there are none)
+    nTracers = size(tracers[end], 1)
+    if nTracers > 0
+        tracerKernel! = forward_euler_tracer_step!(backend, nthreads)
+        tracerKernel!(tracers[end], Tend.tendTracers, timestep, nTracers, nCells,
+                      ndrange=(nCells, nVertLevels, nTracers))
+    end
+
     ssh_length = size(ssh[end])[1]
 
     kernel! = update_sea_surface_height!(backend, nthreads)
     kernel!(ssh[end], Prog.layerThickness[end], Mesh.VertMesh.restingThicknessSum, ssh_length, nVertLevels, ndrange=ssh_length)
-    
-    @pack! Prog = ssh, normalVelocity, layerThickness
-    
+
+    @pack! Prog = ssh, normalVelocity, layerThickness, tracers
+
+end
+
+# Forward Euler step for tracers: φ[t,k,c] += dt * tend[t,k,c].
+@kernel function forward_euler_tracer_step!(tracer, tendTracer, dt, nTracers, arrayLength)
+    iCell, k, t = @index(Global, NTuple)
+    if iCell < arrayLength + 1
+        @inbounds tracer[t, k, iCell] = tracer[t, k, iCell] + dt[1] * tendTracer[t, k, iCell]
+    end
+    @synchronize()
 end
 
 # Forward Euler step. 2-D launch over (ncols, nVertLevels) so every level updates.

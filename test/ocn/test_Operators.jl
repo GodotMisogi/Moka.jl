@@ -232,6 +232,52 @@ end
 end
 
 ###
+### Tracers + EOS + baroclinic PGF (Phase 5).
+###
+@testset "Linear EOS matches closed form" begin
+    EOS = MOKA.EquationOfState
+    T = KA.zeros(backend, Float64, nVertLevels, nCells); fill!(T, 5.0)
+    S = KA.zeros(backend, Float64, nVertLevels, nCells); fill!(S, 35.0)
+    ρ = KA.zeros(backend, Float64, nVertLevels, nCells)
+    p = EOS.LinearEOSParams(ρ0=1000.0, T0=0.0, S0=0.0, α=2e-4, β=8e-4)
+    EOS.compute_density!(ρ, T, S, MPASMesh, EOS.LinearEOS, p)
+    expected = 1000.0*(1 - 2e-4*5.0 + 8e-4*35.0)
+    @test maximum(abs, Array(ρ) .- expected) / expected < 1e-12
+end
+
+@testset "Tracer advection/mixing preserve a constant" begin
+    ssh0 = KA.zeros(backend, Float64, nCells)
+    vel0 = KA.zeros(backend, Float64, nVertLevels, nEdges)
+    lth0 = KA.zeros(backend, Float64, nVertLevels, nCells); fill!(lth0, 100.0)
+    tr0  = KA.zeros(backend, Float64, 1, nVertLevels, nCells); fill!(tr0, 7.0)
+    Prog = MOKA.PrognosticVars(ssh0, vel0, lth0, 2; tracers=tr0)
+    Diag = MOKA.DiagnosticVars(MPASMesh; backend=backend)
+    Tend = MOKA.TendencyVars(MPASMesh; backend=backend, nTracers=1)
+    fill!(Diag.thicknessFlux, 3.0)   # nonzero flux — a constant must still not move
+    MOKA.Tracer.compute_tracer_tendency!(Tend, Prog, Diag, MPASMesh; tracerDel2=100.0)
+    @test maximum(abs, Array(Tend.tendTracers)) < 1e-10
+end
+
+@testset "Baroclinic PGF reduces to barotropic for uniform density" begin
+    NV = MOKA.NormalVelocity
+    xc = Array(HorzMesh.PrimaryCells.xᶜ); Lx = maximum(xc) - minimum(xc)
+    ssh0 = Adapt.adapt(backend, 0.1 .* sin.(2π .* xc ./ Lx))
+    vel0 = KA.zeros(backend, Float64, nVertLevels, nEdges)
+    lth0 = KA.zeros(backend, Float64, nVertLevels, nCells); fill!(lth0, 100.0)
+    Prog = MOKA.PrognosticVars(ssh0, vel0, lth0, 2)
+    Diag = MOKA.DiagnosticVars(MPASMesh; backend=backend)
+    ρ0 = Array(MPASMesh.Constants.density)[1]
+
+    Tb = MOKA.TendencyVars(MPASMesh; backend=backend)
+    NV.pressure_gradient_tendency!(Tb, Prog, Diag, MPASMesh, NV.sshGradient)
+    Tu = MOKA.TendencyVars(MPASMesh; backend=backend)
+    fill!(Diag.density, ρ0)
+    NV.pressure_gradient_tendency!(Tu, Prog, Diag, MPASMesh, NV.baroclinicGradient)
+    tb = Array(Tb.tendNormalVelocity); tu = Array(Tu.tendNormalVelocity)
+    @test maximum(abs, tu .- tb) / max(maximum(abs, tb), eps()) < 1e-10
+end
+
+###
 ### Results Display
 ###
 

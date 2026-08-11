@@ -58,10 +58,20 @@ MPAS-Ocean formulation.
     the column integral of layer thickness. Meshes must be **stacked** (every
     column full-depth, `maxLevelCell == nVertLevels`); partial-cell / variable-depth
     masking is not yet implemented and a non-stacked mesh is rejected at load time.
-    The pressure gradient is still **barotropic** (driven by the single-column SSH,
-    applied identically to every layer); baroclinic pressure, tracers, and an
-    equation of state are future work, so multi-layer dynamics beyond stacked
-    passive layers is not yet available.
+
+    **Tracers, an equation of state, and a baroclinic pressure gradient** are
+    available as opt-in components. `PrognosticVars` carries an optional tracer
+    group (`(nTracers, nVertLevels, nCells)`, empty by default) advanced by a
+    tracer advection + del2 mixing tendency; a linear equation of state
+    (`LinearEOS`) diagnoses density from the tracers; and the pressure-gradient
+    term is selectable via `pressure_gradient=` — `sshGradient` (the default,
+    barotropic) or `baroclinicGradient`, which adds the hydrostatic pressure of the
+    density anomaly and reduces exactly to the barotropic term when density is
+    uniform. Tracer time-stepping is currently wired into the `ForwardEuler`
+    integrator; the `RungeKutta4` path advances the dynamics with tracers held
+    fixed. These components are validated by unit tests (reconstructions, EOS,
+    constant-preservation, barotropic reduction) rather than a full baroclinic
+    verification case, which awaits the Phase 7 test-case framework.
 
 ## The two verification cases
 

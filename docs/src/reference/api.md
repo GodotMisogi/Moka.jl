@@ -90,6 +90,16 @@ ocn_init_shadows
 
 ```@docs
 MOKA.NormalVelocity.compute_normal_velocity_tendency!
+MOKA.Tracer.compute_tracer_tendency!
+```
+
+## Tracers and equation of state
+
+```@docs
+MOKA.EquationOfState.AbstractEOS
+MOKA.EquationOfState.LinearEOS
+MOKA.EquationOfState.LinearEOSParams
+MOKA.EquationOfState.compute_density!
 ```
 
 ## Run loop and automatic differentiation

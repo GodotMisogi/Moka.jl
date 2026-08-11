@@ -4,8 +4,8 @@
 #temperature <: StateVar
 #salinty <: StateVar
 
-mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
-    
+mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}, FV3 <: AbstractArray{F,3}}
+
     # var: time tendency of normal component of velociy [m s^{-2}]
     # dim: (nVertLevels, nEdges), Time?)
     tendNormalVelocity::FV2
@@ -13,29 +13,18 @@ mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
     # var: time tendency of layer thickness [m s^{-1}]
     # dim: (nVertLevels, nCells), Time?)
     tendLayerThickness::FV2
-    
-    #= UNUSED FOR NOW:
-    # var: time tendency of potential temperature [\deg C s^{-1}]
-    # dim: (nVertLevels, nCells), Time?)
-    temperatureTend::FV2
 
-    # var: time tendency of salinity measured as change in practical 
-    #      salinity unit per second [PSU s^{-1}]
-    # dim: (nVertLevels, nCells), Time?)
-    salinityTend::FV2
-
-    # NOTE: I don't think this needs to be a Tendency term. 
-    # var: time tendency of sea-surface height [m s^{-1}]
-    # dim: (nCells), Time?)
-    tendSSH::Array{F,1}
-    =#
+    # var: time tendency of tracers [tracer-unit s^{-1}]
+    # dim: (nTracers, nVertLevels, nCells). Zero-tracer default is (0, nVL, nCells).
+    tendTracers::FV3
 
     function TendencyVars(tendNormalVelocity::AT2D,
-                          tendLayerThickness::AT2D) where {AT2D}
+                          tendLayerThickness::AT2D;
+                          tendTracers::Union{Nothing,AT3D}=nothing) where {AT2D, AT3D}
 
-        # pack all the arguments into a tuple for type and backend checking
+        # pack the 2-D args for type and backend checking
         args = (tendNormalVelocity, tendLayerThickness)
-        
+
         # check the type names; irrespective of type parameters
         # (e.g. `Array` instead of `Array{Float64, 1}`)
         check_typeof_args(args)
@@ -44,13 +33,18 @@ mutable struct TendencyVars{F<:AbstractFloat, FV2 <: AbstractArray{F,2}}
         # check that all args have the same `eltype` and get that type
         type = check_eltype_args(args)
 
-        new{type, AT2D}(tendNormalVelocity, tendLayerThickness)
-    end
-end 
+        # zero-tracer default matching the array type/backend of tendLayerThickness
+        nVertLevels, nCells = size(tendLayerThickness)
+        tend0 = tendTracers === nothing ?
+            similar(tendLayerThickness, (0, nVertLevels, nCells)) : tendTracers
 
-function TendencyVars(Mesh::Mesh; backend=KernelAbstractions.CPU())
-        
-    @unpack HorzMesh, VertMesh = Mesh    
+        new{type, AT2D, typeof(tend0)}(tendNormalVelocity, tendLayerThickness, tend0)
+    end
+end
+
+function TendencyVars(Mesh::Mesh; backend=KernelAbstractions.CPU(), nTracers::Int=0)
+
+    @unpack HorzMesh, VertMesh = Mesh
     @unpack PrimaryCells, Edges = HorzMesh
 
     nEdges = Edges.nEdges
@@ -58,13 +52,13 @@ function TendencyVars(Mesh::Mesh; backend=KernelAbstractions.CPU())
     nVertLevels = VertMesh.nVertLevels
 
     # create zero vectors to store tendecy vars on the desired backend
-    tendNormalVelocity = zeros(Float64, nVertLevels, nEdges) 
+    tendNormalVelocity = zeros(Float64, nVertLevels, nEdges)
     tendLayerThickness = KA.zeros(backend, Float64, nVertLevels, nCells)
+    tendTracers        = KA.zeros(backend, Float64, nTracers, nVertLevels, nCells)
 
-
-
-    TendencyVars(Adapt.adapt(backend, tendNormalVelocity), tendLayerThickness)
-end 
+    TendencyVars(Adapt.adapt(backend, tendNormalVelocity), tendLayerThickness;
+                 tendTracers=tendTracers)
+end
 
 function axb!(a::Array{T,2}, x::T, b::Array{T,2}) where {T<:AbstractFloat}
     m,n = size(a)
